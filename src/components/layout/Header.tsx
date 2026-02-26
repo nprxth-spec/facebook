@@ -10,19 +10,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings, User, ChevronDown } from "lucide-react";
+import { LogOut, Settings, User, ChevronDown, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 export default function Header() {
   const { data: session } = useSession();
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
 
   const initials = session?.user?.name
     ? session.user.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 2)
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2)
     : "U";
 
   return (
@@ -71,7 +75,7 @@ export default function Header() {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onClick={() => signOut({ callbackUrl: "/" })}
+            onClick={() => setIsLogoutConfirmOpen(true)}
             className="text-red-600 dark:text-red-400 cursor-pointer focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
           >
             <LogOut className="mr-2 h-4 w-4" />
@@ -79,6 +83,40 @@ export default function Header() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <Dialog open={isLogoutConfirmOpen} onOpenChange={setIsLogoutConfirmOpen}>
+        <DialogContent className="max-w-[320px] p-0 overflow-hidden rounded-xl border-none shadow-2xl">
+          <div className="p-5 flex items-start gap-4">
+            <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center shrink-0">
+              <LogOut className="w-5 h-5 text-red-600" />
+            </div>
+            <div className="flex-1 pt-0.5">
+              <DialogTitle className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1 text-left">ออกจากระบบ?</DialogTitle>
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-left leading-snug">
+                คุณแน่ใจหรือไม่ที่จะออกจากระบบการใช้งานในขณะนี้?
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 p-4 pt-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="px-4 h-9 rounded-lg text-gray-500 font-medium hover:bg-gray-100 dark:hover:bg-gray-800"
+              onClick={() => setIsLogoutConfirmOpen(false)}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="px-4 h-9 rounded-lg bg-red-600 hover:bg-red-700 font-bold"
+              onClick={() => signOut({ callbackUrl: "/" })}
+            >
+              ตกลง
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

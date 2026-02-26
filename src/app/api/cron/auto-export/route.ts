@@ -20,32 +20,40 @@ export async function GET(req: Request) {
     }
 
     try {
-        // 2. Find all export configs that are auto-enabled
+        // 2. Find all export configs that are auto-enabled (include user preferences)
         const autoConfigs = await prisma.exportConfig.findMany({
             where: { isAuto: true },
+            include: {
+                user: {
+                    include: { preferences: true }
+                }
+            }
         });
 
         if (autoConfigs.length === 0) {
             return NextResponse.json({ message: "No auto-export configs found" });
         }
 
-        // 3. Get current time in HH:mm and day of week (Support Thailand timezone for Vercel)
         const now = new Date();
-        const bangkokTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
-        const currentHourStr = bangkokTime.getHours().toString().padStart(2, "0");
-        const currentDay = bangkokTime.getDay(); // 0 (Sun) to 6 (Sat)
-
         const url = new URL(req.url);
         const forceRun = url.searchParams.get("force") === "true";
 
         let processedFiles = 0;
         const errors: string[] = [];
 
-        console.log(`[Auto-Export] Run triggered at Server: ${now.toISOString()}, BKK: ${bangkokTime.toLocaleString()}`);
+        console.log(`[Auto-Export] Run triggered at Server: ${now.toISOString()}`);
 
         // 4. Process each configuration
         for (const config of autoConfigs) {
-            console.log(`\n[Auto-Export] Checking config: "${config.name}" (ID: ${config.id})`);
+            // Get user's timezone or default to Asia/Bangkok
+            const userTimezone = config.user.preferences?.timezone || "Asia/Bangkok";
+            const userTime = new Date(now.toLocaleString("en-US", { timeZone: userTimezone }));
+
+            const currentHourStr = userTime.getHours().toString().padStart(2, "0");
+            const currentMinuteStr = userTime.getMinutes().toString().padStart(2, "0");
+            const currentDay = userTime.getDay();
+
+            console.log(`\n[Auto-Export] Checking config: "${config.name}" (ID: ${config.id}) | Timezone: ${userTimezone} | UserTime: ${userTime.toLocaleString()}`);
 
             // Bypass schedule checks if forced
             if (!forceRun) {
@@ -59,26 +67,25 @@ export async function GET(req: Request) {
 
                 // Config schedule format is usually "HH:mm"
                 const [scheduleHour, scheduleMinute] = (config.autoSchedule || "00:00").split(":");
-                const currentMinuteStr = bangkokTime.getMinutes().toString().padStart(2, "0");
 
                 // If the schedule hour matches the current hour, run it
                 if (scheduleHour !== currentHourStr) {
-                    console.log(`[-] Skipped: Hour mismatch (Current BKK time: ${currentHourStr}:${currentMinuteStr}, Scheduled time: ${scheduleHour}:${scheduleMinute})`);
+                    console.log(`[-] Skipped: Hour mismatch (User time: ${currentHourStr}:${currentMinuteStr}, Scheduled time: ${scheduleHour}:${scheduleMinute})`);
                     continue;
                 }
 
                 if (parseInt(currentMinuteStr) < parseInt(scheduleMinute)) {
-                    console.log(`[-] Skipped: Minute not reached yet (Current BKK time: ${currentHourStr}:${currentMinuteStr}, Scheduled time: ${scheduleHour}:${scheduleMinute})`);
+                    console.log(`[-] Skipped: Minute not reached yet (User time: ${currentHourStr}:${currentMinuteStr}, Scheduled time: ${scheduleHour}:${scheduleMinute})`);
                     continue;
                 }
 
 
                 // --- Deduplication Check ---
-                // Check ExportLog to see if this config has already run successfully today
-                const startOfToday = new Date(bangkokTime);
+                // Check ExportLog to see if this config has already run successfully today in USER'S TIMEZONE
+                const startOfToday = new Date(userTime);
                 startOfToday.setHours(0, 0, 0, 0);
 
-                const endOfToday = new Date(bangkokTime);
+                const endOfToday = new Date(userTime);
                 endOfToday.setHours(23, 59, 59, 999);
 
                 const existingLog = await prisma.exportLog.findFirst({

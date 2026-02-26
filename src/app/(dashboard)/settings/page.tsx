@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { useTheme } from "@/components/providers/ThemeProvider";
 
 interface ManagerAccount { id: string; accountId: string; name: string; platform: string; isActive: boolean }
 
@@ -58,12 +59,31 @@ export default function SettingsPage() {
   const hasGoogle = connectedProviders.includes("google");
   const hasFacebook = connectedProviders.includes("facebook");
 
-  // Preferences
-  const [theme, setTheme] = useState<"light" | "dark" | "system">("light");
-  const [accentColor, setAccent] = useState("blue");
-  const [language, setLanguage] = useState("th");
-  const [timezone, setTimezone] = useState("Asia/Bangkok");
+  const {
+    theme: globalTheme,
+    accentColor: globalAccent,
+    language: globalLanguage,
+    timezone: globalTimezone,
+    setTheme: setGlobalTheme,
+    setAccentColor: setGlobalAccent,
+    setLanguage: setGlobalLanguage,
+    setTimezone: setGlobalTimezone,
+  } = useTheme();
+
+  // Preferences (Local state for editing before save)
+  const [theme, setTheme] = useState(globalTheme);
+  const [accentColor, setAccent] = useState(globalAccent);
+  const [language, setLanguage] = useState(globalLanguage);
+  const [timezone, setTimezone] = useState(globalTimezone);
   const [prefsSaving, setPrefsSaving] = useState(false);
+
+  // Sync with global state when it changes (e.g. on initial load)
+  useEffect(() => {
+    setTheme(globalTheme);
+    setAccent(globalAccent);
+    setLanguage(globalLanguage);
+    setTimezone(globalTimezone);
+  }, [globalTheme, globalAccent, globalLanguage, globalTimezone]);
 
   // Manager accounts
   const [accounts, setAccounts] = useState<ManagerAccount[]>([]);
@@ -239,6 +259,10 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ theme, accentColor, language, timezone }),
       });
+      setGlobalTheme(theme);
+      setGlobalAccent(accentColor);
+      setGlobalLanguage(language);
+      setGlobalTimezone(timezone);
       toast.success("บันทึกการตั้งค่าแล้ว");
     } catch {
       toast.error("เกิดข้อผิดพลาด");
@@ -357,7 +381,7 @@ export default function SettingsPage() {
             {tabs.map((t) => (
               <button key={t.id} onClick={() => setActiveTab(t.id)}
                 className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
-                  activeTab === t.id ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                  activeTab === t.id ? "bg-primary/10 text-primary dark:bg-primary/30 dark:text-primary" : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
                 )}>
                 <t.icon className="w-4 h-4 shrink-0" />{t.label}
               </button>
@@ -365,7 +389,7 @@ export default function SettingsPage() {
             <Separator className="my-2" />
             <button onClick={() => setActiveTab("delete")}
               className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
-                activeTab === "delete" ? "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                activeTab === "delete" ? "bg-primary/5 text-primary dark:bg-primary/20 dark:text-primary" : "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
               )}>
               <Trash2 className="w-4 h-4 shrink-0" />ลบบัญชี
             </button>
@@ -419,7 +443,7 @@ export default function SettingsPage() {
                   },
                   {
                     key: "facebook", label: "Facebook", desc: hasFacebook ? "เชื่อมต่อแล้ว — ใช้สำหรับดึงข้อมูลโฆษณา" : "ยังไม่ได้เชื่อมต่อ",
-                    connected: hasFacebook, icon: <FacebookIcon className="w-5 h-5" />, bg: "bg-blue-50 dark:bg-blue-900/20",
+                    connected: hasFacebook, icon: <FacebookIcon className="w-5 h-5" />, bg: "bg-primary/10 dark:bg-primary/20",
                   },
                 ].map((p) => (
                   <div key={p.key} className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -438,10 +462,10 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 ))}
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="p-3 bg-primary/10 dark:bg-primary/20 rounded-lg border border-primary/20 dark:border-primary/30">
                   <div className="flex items-start gap-2">
-                    <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                    <Shield className="w-4 h-4 text-primary dark:text-primary mt-0.5 shrink-0" />
+                    <p className="text-xs text-primary dark:text-primary">
                       Token ถูกเก็บอย่างปลอดภัยในฐานข้อมูล ใช้เพื่อดึงข้อมูลโฆษณาและส่งออกเท่านั้น
                     </p>
                   </div>
@@ -558,7 +582,7 @@ export default function SettingsPage() {
                               >
                                 <td className="px-4 py-2">
                                   <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+                                    <div className="w-8 h-8 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center">
                                       <FacebookIcon className="w-4 h-4" />
                                     </div>
                                     <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
@@ -635,7 +659,7 @@ export default function SettingsPage() {
             <Card>
               <CardHeader><CardTitle>ตั้งค่าการชำระเงิน</CardTitle><CardDescription>จัดการแผนบริการ</CardDescription></CardHeader>
               <CardContent className="space-y-6">
-                <div className="p-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+                <div className="p-4 rounded-xl bg-gradient-to-r from-primary to-indigo-600 text-white">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm opacity-80">แผนปัจจุบัน</p>
@@ -650,7 +674,7 @@ export default function SettingsPage() {
                     { name: "Pro", price: "฿499", features: ["ส่งออกไม่จำกัด", "10 บัญชีโฆษณา", "ส่งออกอัตโนมัติ", "Priority Support"], highlight: false },
                     { name: "Business", price: "฿1,299", features: ["ทุกอย่างใน Pro", "ไม่จำกัดบัญชีโฆษณา", "API Access", "Dedicated Support"], highlight: true },
                   ].map((plan) => (
-                    <div key={plan.name} className={cn("p-4 rounded-xl border-2 space-y-3", plan.highlight ? "border-blue-500 bg-blue-50 dark:bg-blue-900/10" : "border-gray-200 dark:border-gray-700")}>
+                    <div key={plan.name} className={cn("p-4 rounded-xl border-2 space-y-3", plan.highlight ? "border-primary bg-primary/10 dark:bg-primary/10" : "border-gray-200 dark:border-gray-700")}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900 dark:text-gray-100">{plan.name}</span>
@@ -680,11 +704,14 @@ export default function SettingsPage() {
                   <Label>ธีม</Label>
                   <div className="grid grid-cols-3 gap-3">
                     {([{ id: "light", label: "สว่าง", icon: Sun }, { id: "dark", label: "มืด", icon: Moon }, { id: "system", label: "ตามระบบ", icon: Monitor }] as const).map((t) => (
-                      <button key={t.id} onClick={() => setTheme(t.id)}
+                      <button key={t.id} onClick={() => {
+                        setTheme(t.id);
+                        setGlobalTheme(t.id);
+                      }}
                         className={cn("flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-colors",
-                          theme === t.id ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
+                          theme === t.id ? "border-primary bg-primary/5 dark:bg-primary/20" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
                         )}>
-                        <t.icon className={cn("w-5 h-5", theme === t.id ? "text-blue-600 dark:text-blue-400" : "text-gray-500")} />
+                        <t.icon className={cn("w-5 h-5", theme === t.id ? "text-primary" : "text-gray-500")} />
                         <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{t.label}</span>
                       </button>
                     ))}
@@ -694,8 +721,11 @@ export default function SettingsPage() {
                   <Label>สีธีมหลัก</Label>
                   <div className="flex gap-2 flex-wrap">
                     {ACCENT_COLORS.map((c) => (
-                      <button key={c.id} onClick={() => setAccent(c.id)} title={c.label}
-                        className={cn("w-8 h-8 rounded-full relative transition-all", c.cls, accentColor === c.id && "ring-2 ring-offset-2 ring-gray-400 dark:ring-gray-500")}>
+                      <button key={c.id} onClick={() => {
+                        setAccent(c.id);
+                        setGlobalAccent(c.id);
+                      }} title={c.label}
+                        className={cn("w-8 h-8 rounded-full relative transition-all", c.cls, accentColor === c.id && "ring-2 ring-offset-2 ring-gray-400 dark:ring-gray-500 shadow-lg scale-110")}>
                         {accentColor === c.id && <Check className="w-4 h-4 text-white absolute inset-0 m-auto" />}
                       </button>
                     ))}
@@ -705,7 +735,7 @@ export default function SettingsPage() {
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5"><Globe className="w-3.5 h-3.5" />ภาษา</Label>
                     <select value={language} onChange={(e) => setLanguage(e.target.value)}
-                      className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary">
                       <option value="th">ภาษาไทย</option>
                       <option value="en">English</option>
                     </select>
@@ -713,7 +743,7 @@ export default function SettingsPage() {
                   <div className="space-y-1.5">
                     <Label className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />ไทม์โซน</Label>
                     <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
-                      className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary">
                       <option value="Asia/Bangkok">Asia/Bangkok (UTC+7)</option>
                       <option value="Asia/Singapore">Asia/Singapore (UTC+8)</option>
                       <option value="UTC">UTC</option>

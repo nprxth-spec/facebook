@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   FileSpreadsheet,
-  History,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -24,11 +23,6 @@ const navItems = [
     label: "ส่งออกข้อมูล",
     href: "/export",
     icon: FileSpreadsheet,
-  },
-  {
-    label: "ประวัติการส่งออก",
-    href: "/export/logs",
-    icon: History,
   },
   {
     label: "ตั้งค่า",
@@ -56,7 +50,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className={cn("flex items-center h-16 px-4 border-b border-gray-200 dark:border-gray-700", collapsed ? "justify-center" : "justify-between")}>
         {!collapsed && (
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" />
             </div>
             <span className="font-bold text-gray-900 dark:text-white text-lg">AdSync</span>
@@ -64,7 +58,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
         {collapsed && (
           <Link href="/dashboard">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" />
             </div>
           </Link>
@@ -92,7 +86,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
                     isActive
-                      ? "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                      ? "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary"
                       : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100",
                     collapsed && "justify-center px-2"
                   )}
