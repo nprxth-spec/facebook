@@ -47,7 +47,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { userId: user.id },
           select: { provider: true },
         });
-        session.user.connectedProviders = accounts.map((a) => a.provider);
+        session.user.connectedProviders = accounts.map((a: { provider: string }) => a.provider);
       }
       return session;
     },

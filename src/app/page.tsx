@@ -1,5 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Zap,
   BarChart3,
@@ -9,48 +15,62 @@ import {
   Clock,
   ArrowRight,
   CheckCircle2,
+  Users,
 } from "lucide-react";
+import { useTheme } from "@/components/providers/ThemeProvider";
 
 const features = [
   {
     icon: FileSpreadsheet,
-    title: "ส่งออกไป Google Sheets",
-    description: "ส่งข้อมูลโฆษณา Facebook ไปยัง Google Sheets ได้ทันที รองรับหลายบัญชีพร้อมกัน",
+    titleTh: "ส่งออกไป Google Sheets",
+    titleEn: "Export to Google Sheets",
+    descriptionTh: "ส่งข้อมูลโฆษณา Facebook ไปยัง Google Sheets ได้ทันที รองรับหลายบัญชีพร้อมกัน",
+    descriptionEn: "Send your Facebook Ads data to Google Sheets instantly, supporting multiple accounts.",
     color: "bg-green-50 text-green-600",
   },
   {
     icon: RefreshCw,
-    title: "อัปเดตอัตโนมัติ",
-    description: "ตั้งค่าการส่งออกอัตโนมัติทุกวัน ไม่ต้องทำซ้ำด้วยตัวเอง",
+    titleTh: "อัปเดตอัตโนมัติ",
+    titleEn: "Automatic updates",
+    descriptionTh: "ตั้งค่าการส่งออกอัตโนมัติทุกวัน ไม่ต้องทำซ้ำด้วยตัวเอง",
+    descriptionEn: "Schedule automatic daily exports so you never have to repeat the same work.",
     color: "bg-blue-50 text-blue-600",
   },
   {
     icon: BarChart3,
-    title: "แผงควบคุม",
-    description: "ดูสถิติและสถานะการส่งออกทั้งหมดได้ในหน้าเดียว",
+    titleTh: "แผงควบคุม",
+    titleEn: "Dashboard",
+    descriptionTh: "ดูสถิติและสถานะการส่งออกทั้งหมดได้ในหน้าเดียว",
+    descriptionEn: "See all export stats and statuses in a single dashboard.",
     color: "bg-purple-50 text-purple-600",
   },
   {
     icon: Shield,
-    title: "ปลอดภัย",
-    description: "เข้าสู่ระบบด้วย Google หรือ Facebook OAuth ที่ปลอดภัย",
+    titleTh: "ปลอดภัย",
+    titleEn: "Secure",
+    descriptionTh: "เข้าสู่ระบบด้วย Google หรือ Facebook OAuth ที่ปลอดภัย",
+    descriptionEn: "Sign in securely with Google or Facebook OAuth.",
     color: "bg-yellow-50 text-yellow-600",
   },
   {
     icon: Clock,
-    title: "ประวัติการส่งออก",
-    description: "ตรวจสอบประวัติการส่งออกทุกครั้ง พร้อมรายละเอียดครบถ้วน",
+    titleTh: "ประวัติการส่งออก",
+    titleEn: "Export history",
+    descriptionTh: "ตรวจสอบประวัติการส่งออกทุกครั้ง พร้อมรายละเอียดครบถ้วน",
+    descriptionEn: "Review every export with full details in the history.",
     color: "bg-red-50 text-red-600",
   },
   {
     icon: Zap,
-    title: "แมพคอลัมน์อิสระ",
-    description: "กำหนดเองได้ว่าข้อมูลไหนจะไปอยู่คอลัมน์ไหนใน Sheet",
+    titleTh: "แมพคอลัมน์อิสระ",
+    titleEn: "Flexible column mapping",
+    descriptionTh: "กำหนดเองได้ว่าข้อมูลไหนจะไปอยู่คอลัมน์ไหนใน Sheet",
+    descriptionEn: "Define exactly which data goes to which column in your sheet.",
     color: "bg-indigo-50 text-indigo-600",
   },
 ];
 
-const benefits = [
+const benefitsTh = [
   "รองรับหลายบัญชีโฆษณาพร้อมกัน",
   "เลือกช่วงวันที่ข้อมูลได้เอง",
   "แมพคอลัมน์ตามต้องการ",
@@ -59,135 +79,248 @@ const benefits = [
   "รองรับ Dark Mode",
 ];
 
+const benefitsEn = [
+  "Support multiple ad accounts at once",
+  "Choose any date range you need",
+  "Flexible column mapping",
+  "Manual or automatic exports",
+  "Complete export history",
+  "Built-in dark mode support",
+];
+
 export default function LandingPage() {
+  const router = useRouter();
+  const { status } = useSession();
+  const { language } = useTheme();
+  const isThai = language === "th";
+  const benefits = isThai ? benefitsTh : benefitsEn;
+
+  // If user is already logged in, send them to dashboard when visiting "/"
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace("/dashboard");
+    }
+  }, [status, router]);
+
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950">
+    <div className="min-h-screen bg-gradient-to-b from-[#f4f5ff] via-[#f8f9ff] to-[#fef9ff] text-slate-900 dark:bg-slate-950 dark:text-slate-50">
       {/* Navbar */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <nav className="fixed top-0 w-full z-50 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl shadow-sm dark:bg-slate-950/80 dark:border-white/10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Zap className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-500 to-cyan-400 flex items-center justify-center shadow-[0_12px_30px_rgba(37,99,235,0.35)]">
+              <Zap className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-gray-900 dark:text-white text-xl">AdSync</span>
+            <div className="flex flex-col leading-tight">
+              <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">
+                AdSync
+              </span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Facebook Ads → Google Sheets
+              </span>
+            </div>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link href="/login">
-              <Button variant="outline" size="sm">เข้าสู่ระบบ</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-slate-700 border border-slate-200 hover:bg-slate-50 dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/5"
+              >
+                {isThai ? "เข้าสู่ระบบ" : "Log in"}
+              </Button>
             </Link>
             <Link href="/login">
-              <Button size="sm">เริ่มต้นฟรี</Button>
+              <Button
+                size="sm"
+                className="bg-gradient-to-r from-blue-500 to-cyan-400 text-white border-none shadow-[0_18px_45px_rgba(37,99,235,0.45)] hover:from-blue-400 hover:to-cyan-300"
+              >
+                {isThai ? "เริ่มต้นฟรี" : "Start for free"}
+              </Button>
             </Link>
           </div>
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400 text-sm font-medium mb-6">
-          <Zap className="w-4 h-4" />
-          ส่งข้อมูลโฆษณาไป Google Sheets อัตโนมัติ
-        </div>
-        <h1 className="text-5xl sm:text-6xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-6">
-          จัดการข้อมูล{" "}
-          <span className="text-blue-600">Facebook Ads</span>
-          <br />
-          ง่ายขึ้นกว่าเดิม
-        </h1>
-        <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-10">
-          ส่งออกข้อมูลโฆษณา Facebook ไปยัง Google Sheets โดยอัตโนมัติ
-          รองรับหลายบัญชี แมพคอลัมน์ได้เอง และตั้งเวลาส่งออกได้ตามต้องการ
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link href="/login">
-            <Button size="lg" className="gap-2 px-8">
-              เริ่มใช้งานฟรี <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
-          <Link href="#features">
-            <Button variant="outline" size="lg" className="px-8">
-              ดูฟีเจอร์
-            </Button>
-          </Link>
-        </div>
-        {/* Preview image placeholder */}
-        <div className="mt-16 relative mx-auto max-w-5xl rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 overflow-hidden shadow-2xl">
-          <div className="h-10 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-400" />
-            <div className="w-3 h-3 rounded-full bg-yellow-400" />
-            <div className="w-3 h-3 rounded-full bg-green-400" />
-            <div className="flex-1 mx-4">
-              <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded-md w-48 mx-auto" />
+      <section className="pt-28 sm:pt-32 lg:pt-36 pb-20 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto grid gap-12 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] items-center">
+          {/* Left: copy */}
+          <div className="space-y-8">
+            <div className="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white px-3 py-1 text-[11px] text-sky-700 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-sky-200">
+              <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(74,222,128,0.8)]" />
+              <span className="uppercase tracking-[0.16em] font-semibold">
+                {isThai ? "อัปเดตข้อมูลแบบเรียลไทม์" : "Real‑time ad reporting"}
+              </span>
             </div>
-          </div>
-          <div className="p-8 grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="h-full bg-gray-100 dark:bg-gray-700 rounded-xl p-4 space-y-3">
-              {["แดชบอร์ด", "ส่งออกข้อมูล", "ประวัติ", "ตั้งค่า"].map((item) => (
-                <div key={item} className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded bg-gray-300 dark:bg-gray-600" />
-                  <div className="text-xs text-gray-500 dark:text-gray-400">{item}</div>
-                </div>
-              ))}
-            </div>
-            <div className="col-span-3 space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                {["บัญชีโฆษณา", "ส่งออกวันนี้", "แถวทั้งหมด"].map((stat) => (
-                  <div key={stat} className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-600 shadow-sm">
-                    <div className="text-xs text-gray-500 mb-1">{stat}</div>
-                    <div className="h-6 bg-gray-200 dark:bg-gray-600 rounded w-16" />
-                  </div>
-                ))}
-              </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-600 shadow-sm h-32" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section id="features" className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">ฟีเจอร์ทั้งหมด</h2>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            ทุกสิ่งที่คุณต้องการสำหรับจัดการข้อมูลโฆษณา
-          </p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((feat) => (
-            <div key={feat.title} className="p-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:shadow-md transition-shadow">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${feat.color}`}>
-                <feat.icon className="w-6 h-6" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">{feat.title}</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">{feat.description}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Benefits */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
-        <div className="rounded-2xl bg-blue-600 p-10 md:p-16 text-white">
-          <div className="grid md:grid-cols-2 gap-10 items-center">
-            <div>
-              <h2 className="text-3xl font-bold mb-4">ทำไมต้องเลือก AdSync?</h2>
-              <p className="text-blue-100 text-lg mb-8">
-                ประหยัดเวลาการทำรายงานด้วยการส่งออกข้อมูลอัตโนมัติ
+            <div className="space-y-4">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold leading-tight tracking-tight">
+                {isThai ? (
+                  <>
+                    ดึงข้อมูล{" "}
+                    <span className="bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+                      Facebook Ads
+                    </span>
+                    <br />
+                    เข้าสู่ Google Sheets อัตโนมัติ
+                  </>
+                ) : (
+                  <>
+                    Sync your{" "}
+                    <span className="bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+                      Facebook Ads
+                    </span>
+                    <br />
+                    into Google Sheets, on autopilot.
+                  </>
+                )}
+              </h1>
+              <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-xl">
+                {isThai
+                  ? "เชื่อมต่อบัญชีโฆษณา ตั้งเวลาส่งออก และให้รายงานวิ่งเข้าชีตของคุณทุกวัน โดยไม่ต้องดึง Report เองอีกต่อไป"
+                  : "Connect your ad accounts, schedule exports, and keep your reports flowing into Sheets every day—without ever downloading a CSV again."}
               </p>
-              <Link href="/login">
-                <Button variant="outline" size="lg" className="bg-white text-blue-600 hover:bg-blue-50 border-white gap-2">
-                  เริ่มต้นเลย <ArrowRight className="w-4 h-4" />
-                </Button>
-              </Link>
             </div>
-            <ul className="space-y-3">
-              {benefits.map((b) => (
-                <li key={b} className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-blue-200 shrink-0" />
-                  <span className="text-blue-100">{b}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <div className="flex gap-3">
+                <Link href="/login">
+                  <Button
+                    size="lg"
+                    className="gap-2 px-7 bg-gradient-to-r from-blue-500 to-cyan-400 text-white border-none shadow-[0_20px_45px_rgba(37,99,235,0.55)] hover:from-blue-400 hover:to-cyan-300"
+                  >
+                    {isThai ? "เริ่มใช้งานฟรี" : "Get started for free"}
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
+                </Link>
+                <Link href="#features">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="px-6 border-white/20 bg-transparent text-slate-100 hover:bg-white/5"
+                  >
+                    {isThai ? "ดูฟีเจอร์" : "View features"}
+                  </Button>
+                </Link>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-1 sm:mt-0">
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  {isThai
+                    ? "ฟรี 14 วัน · ไม่ต้องใช้บัตรเครดิต"
+                    : "14‑day free trial · No card required"}
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 pt-2">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white border border-slate-200 px-3 py-1 text-[11px] text-slate-700 shadow-sm dark:bg-white/5 dark:border-white/10 dark:text-slate-200">
+                <BarChart3 className="w-3.5 h-3.5 text-sky-300" />
+                {isThai ? "รองรับหลายบัญชีโฆษณา" : "Multi‑account exports"}
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-white border border-slate-200 px-3 py-1 text-[11px] text-slate-700 shadow-sm dark:bg-white/5 dark:border-white/10 dark:text-slate-200">
+                <RefreshCw className="w-3.5 h-3.5 text-sky-300" />
+                {isThai ? "ตั้งเวลาส่งออกรายวัน" : "Daily scheduling"}
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-white border border-slate-200 px-3 py-1 text-[11px] text-slate-700 shadow-sm dark:bg-white/5 dark:border-white/10 dark:text-slate-200">
+                <Shield className="w-3.5 h-3.5 text-sky-300" />
+                {isThai ? "OAuth ปลอดภัยด้วย Google / Facebook" : "Secure OAuth with Google / Facebook"}
+              </div>
+            </div>
+          </div>
+
+          {/* Right: app preview */}
+          <div className="relative">
+            <div className="pointer-events-none absolute -top-10 -right-10 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
+            <div className="pointer-events-none absolute bottom-0 -left-6 h-32 w-32 rounded-full bg-cyan-400/10 blur-3xl" />
+            <div className="relative rounded-3xl border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.15)] overflow-hidden backdrop-blur-sm dark:border-white/10 dark:bg-slate-900/80">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-white/10">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                  </div>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    {isThai ? "แดชบอร์ดภาพรวมการส่งออก" : "Export overview dashboard"}
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                  AdSync
+                </span>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    {
+                      icon: Users,
+                      labelTh: "บัญชีโฆษณา",
+                      labelEn: "Ad accounts",
+                    },
+                    {
+                      icon: FileSpreadsheet,
+                      labelTh: "ส่งออกวันนี้",
+                      labelEn: "Exports today",
+                    },
+                    {
+                      icon: BarChart3,
+                      labelTh: "แถวทั้งหมด",
+                      labelEn: "Total rows",
+                    },
+                  ].map((stat, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-2xl bg-slate-50 border border-slate-100 p-3 space-y-1.5 dark:bg-slate-900/70 dark:border-white/10"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="rounded-lg bg-slate-100 p-1.5 dark:bg-slate-800/80">
+                          <stat.icon className="w-3.5 h-3.5 text-sky-500 dark:text-sky-300" />
+                        </div>
+                        <span className="text-[11px] text-emerald-300">
+                          +{(idx + 1) * 3}%
+                        </span>
+                      </div>
+                      <div className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                        12{idx}
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {isThai ? stat.labelTh : stat.labelEn}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 space-y-3 dark:border-white/10 dark:bg-slate-900/70">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                        {isThai ? "งานที่ตั้งเวลา" : "Scheduled jobs"}
+                      </p>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                        Facebook Ads → Sheets
+                      </p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="border-emerald-400/60 bg-emerald-400/10 text-[11px] text-emerald-700 px-2 py-0.5 dark:text-emerald-200"
+                    >
+                      <span className="mr-1 inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      {isThai ? "ทำงานอยู่" : "Running"}
+                    </Badge>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-slate-200 overflow-hidden dark:bg-slate-800">
+                    <div className="h-full w-3/4 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>
+                      {isThai
+                        ? "อัปเดตทุกวัน เวลา 08:00 น."
+                        : "Runs daily at 08:00"}
+                    </span>
+                    <span>
+                      {isThai ? "ดึง 3 บัญชี" : "3 accounts"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -202,7 +335,7 @@ export default function LandingPage() {
             <span className="font-bold text-gray-900 dark:text-white">AdSync</span>
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            © 2026 AdSync. สงวนลิขสิทธิ์ทั้งหมด
+            {isThai ? "© 2026 AdSync. สงวนลิขสิทธิ์ทั้งหมด" : "© 2026 AdSync. All rights reserved."}
           </p>
         </div>
       </footer>

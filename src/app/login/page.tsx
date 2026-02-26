@@ -4,6 +4,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Zap } from "lucide-react";
 import Link from "next/link";
+import { useTheme } from "@/components/providers/ThemeProvider";
 
 function GoogleIcon() {
   return (
@@ -18,67 +19,136 @@ function GoogleIcon() {
 
 function FacebookIcon() {
   return (
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2">
+    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="currentColor">
       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
     </svg>
   );
 }
 
 export default function LoginPage() {
+  const { language } = useTheme();
+  const isThai = language === "th";
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 p-8">
-          {/* Logo */}
-          <div className="flex flex-col items-center mb-8">
-            <Link href="/" className="flex items-center gap-2 mb-6">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
-                <Zap className="w-6 h-6 text-white" />
+    <div className="relative min-h-screen bg-gradient-to-br from-[#f4f5ff] via-[#f8f9ff] to-[#fef9ff] dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center px-4 py-4">
+      {/* Top brand logo (aligned with landing navbar) */}
+      <header className="absolute top-4 left-0 w-full">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-500 to-cyan-400 flex items-center justify-center shadow-[0_12px_30px_rgba(37,99,235,0.35)]">
+              <Zap className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              AdSync
+            </span>
+          </Link>
+        </div>
+      </header>
+
+      {/* Center card */}
+      <div className="w-full max-w-sm">
+        <div className="relative mx-auto rounded-3xl bg-white/95 dark:bg-slate-900 shadow-[0_18px_60px_rgba(15,23,42,0.16)] border border-slate-100/90 dark:border-slate-800 px-7 py-8">
+            {/* Heading */}
+            <div className="text-center mb-5">
+              <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+                {isThai ? "ยินดีต้อนรับสู่ AdSync" : "Welcome to AdSync"}
+              </h1>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                {isThai
+                  ? "ปลดล็อกทุกฟีเจอร์ด้วยการเข้าสู่ระบบ"
+                  : "Unlock all features by logging in"}
+              </p>
+            </div>
+
+            {/* Login buttons */}
+            <div className="flex flex-col items-center gap-3">
+              <Button
+                onClick={() => signIn("google", { callbackUrl: "/connect" })}
+                variant="outline"
+                size="lg"
+                className="w-full max-w-[300px] h-10 justify-center gap-1.5 rounded-xl border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-[13px] px-3"
+              >
+                <GoogleIcon />
+                {isThai ? "เข้าสู่ระบบด้วย Google" : "Continue with Google"}
+              </Button>
+
+              <Button
+                onClick={() => signIn("facebook", { callbackUrl: "/connect" })}
+                size="lg"
+                className="w-full max-w-[300px] h-10 justify-center gap-1.5 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white text-[13px] px-3"
+              >
+                <FacebookIcon />
+                {isThai ? "เข้าสู่ระบบด้วย Facebook" : "Continue with Facebook"}
+              </Button>
+
+              {/* Divider */}
+              <div className="flex items-center gap-3 py-1">
+                <span className="h-px flex-1 bg-slate-200" />
+                <span className="text-[11px] text-slate-400 uppercase tracking-[0.18em]">
+                  {isThai ? "หรือ" : "or"}
+                </span>
+                <span className="h-px flex-1 bg-slate-200" />
               </div>
-              <span className="font-bold text-gray-900 dark:text-white text-2xl">AdSync</span>
-            </Link>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">ยินดีต้อนรับ</h1>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 text-center">
-              เข้าสู่ระบบเพื่อจัดการข้อมูลโฆษณาของคุณ
-            </p>
-          </div>
 
-          {/* Login Buttons */}
-          <div className="space-y-3">
-            <Button
-              onClick={() => signIn("google", { callbackUrl: "/connect" })}
-              variant="outline"
-              size="lg"
-              className="w-full gap-3 font-medium border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500"
-            >
-              <GoogleIcon />
-              เข้าสู่ระบบด้วย Google
-            </Button>
+              {/* Email button (placeholder / normal button) */}
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full max-w-[300px] h-10 justify-center gap-1.5 rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-[13px] px-3"
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-[11px]">
+                  @
+                </span>
+                {isThai ? "เข้าสู่ระบบด้วยอีเมล" : "Continue with Email"}
+              </Button>
+            </div>
 
-            <Button
-              onClick={() => signIn("facebook", { callbackUrl: "/connect" })}
-              size="lg"
-              className="w-full gap-3 font-medium bg-[#1877F2] hover:bg-[#166fe5] text-white border-0"
-            >
-              <FacebookIcon />
-              เข้าสู่ระบบด้วย Facebook
-            </Button>
-          </div>
-
-          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-              การเข้าสู่ระบบถือว่าคุณยอมรับ{" "}
-              <span className="text-blue-600 dark:text-blue-400 cursor-pointer">เงื่อนไขการใช้งาน</span>
-              {" "}และ{" "}
-              <span className="text-blue-600 dark:text-blue-400 cursor-pointer">นโยบายความเป็นส่วนตัว</span>
-            </p>
-          </div>
+            {/* Terms */}
+            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 leading-relaxed">
+              {isThai ? (
+                <>
+                  การกดปุ่มเข้าสู่ระบบ ถือว่าคุณยอมรับ{" "}
+                  <Link
+                    href="/terms"
+                    className="text-blue-600 hover:underline cursor-pointer"
+                  >
+                    เงื่อนไขการใช้งาน
+                  </Link>{" "}
+                  และ{" "}
+                  <Link
+                    href="/privacy"
+                    className="text-blue-600 hover:underline cursor-pointer"
+                  >
+                    นโยบายความเป็นส่วนตัว
+                  </Link>
+                </>
+              ) : (
+                <>
+                  By clicking continue, you agree to our{" "}
+                  <Link
+                    href="/terms"
+                    className="text-blue-600 hover:underline cursor-pointer"
+                  >
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link
+                    href="/privacy"
+                    className="text-blue-600 hover:underline cursor-pointer"
+                  >
+                    Privacy Policy
+                  </Link>
+                </>
+              )}
+              </p>
+            </div>
         </div>
 
-        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
-          <Link href="/" className="hover:text-gray-700 dark:hover:text-gray-300">
-            ← กลับหน้าหลัก
+        {/* Back link */}
+        <p className="text-center text-xs text-slate-400 mt-6">
+          <Link href="/" className="hover:text-slate-700 dark:hover:text-slate-200">
+            {isThai ? "← กลับหน้าหลัก" : "← Back to homepage"}
           </Link>
         </p>
       </div>

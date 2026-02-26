@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, ArrowRight, Zap } from "lucide-react";
+import { useTheme } from "@/components/providers/ThemeProvider";
 
 function GoogleIcon() {
   return (
@@ -29,6 +30,8 @@ export default function ConnectPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const { language } = useTheme();
+  const isThai = language === "th";
 
   const connectedProviders = session?.user?.connectedProviders ?? [];
   const hasGoogle = connectedProviders.includes("google");
@@ -75,10 +78,12 @@ export default function ConnectPage() {
                 <Zap className="w-7 h-7 text-white" />
               </div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white text-center">
-                เชื่อมต่อ Facebook
+                {isThai ? "เชื่อมต่อ Facebook" : "Connect Facebook"}
               </h1>
               <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 text-center">
-                เชื่อมต่อบัญชี Facebook เพื่อดึงข้อมูลโฆษณาได้เต็มรูปแบบ
+                {isThai
+                  ? "เชื่อมต่อบัญชี Facebook เพื่อดึงข้อมูลโฆษณาได้เต็มรูปแบบ"
+                  : "Connect your Facebook account to fully fetch ad data."}
               </p>
             </div>
 
@@ -87,15 +92,21 @@ export default function ConnectPage() {
               <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                 <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-green-800 dark:text-green-300">Google เชื่อมต่อแล้ว</p>
+                  <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                    {isThai ? "Google เชื่อมต่อแล้ว" : "Google connected"}
+                  </p>
                   <p className="text-xs text-green-600 dark:text-green-400">{session?.user?.email}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
                 <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-500 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Facebook ยังไม่ได้เชื่อมต่อ</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">จำเป็นสำหรับดึงข้อมูลโฆษณา</p>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {isThai ? "Facebook ยังไม่ได้เชื่อมต่อ" : "Facebook not connected yet"}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {isThai ? "จำเป็นสำหรับดึงข้อมูลโฆษณา" : "Required to fetch ad data"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -108,7 +119,7 @@ export default function ConnectPage() {
                 disabled={loading}
               >
                 <FacebookIcon />
-                เชื่อมต่อ Facebook
+                {isThai ? "เชื่อมต่อ Facebook" : "Connect Facebook"}
               </Button>
               <Button
                 onClick={handleSkip}
@@ -116,12 +127,14 @@ export default function ConnectPage() {
                 size="lg"
                 className="w-full text-gray-500 dark:text-gray-400"
               >
-                ข้ามขั้นตอนนี้
+                {isThai ? "ข้ามขั้นตอนนี้" : "Skip for now"}
                 <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
             <p className="text-xs text-center text-gray-400 dark:text-gray-500 mt-4">
-              คุณสามารถเชื่อมต่อภายหลังได้ในหน้าตั้งค่า
+              {isThai
+                ? "คุณสามารถเชื่อมต่อภายหลังได้ในหน้าตั้งค่า"
+                : "You can connect later from the settings page."}
             </p>
           </div>
         </div>
@@ -140,17 +153,19 @@ export default function ConnectPage() {
                 <Zap className="w-7 h-7 text-white" />
               </div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white text-center">
-                เชื่อมต่อ Google
+                {isThai ? "เชื่อมต่อ Google" : "Connect Google"}
               </h1>
               <p className="text-gray-500 dark:text-gray-400 text-sm mt-2 text-center">
-                จำเป็นต้องเชื่อมต่อ Google เพื่อส่งออกข้อมูลไปยัง Google Sheets
+                {isThai
+                  ? "จำเป็นต้องเชื่อมต่อ Google เพื่อส่งออกข้อมูลไปยัง Google Sheets"
+                  : "Google is required to export data to Google Sheets."}
               </p>
             </div>
 
             {/* Required badge */}
             <div className="mb-4 flex justify-center">
               <span className="px-3 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-semibold rounded-full border border-red-200 dark:border-red-800">
-                จำเป็นต้องเชื่อมต่อ — ไม่สามารถข้ามได้
+                {isThai ? "จำเป็นต้องเชื่อมต่อ — ไม่สามารถข้ามได้" : "Connection required — cannot be skipped"}
               </span>
             </div>
 
@@ -159,15 +174,21 @@ export default function ConnectPage() {
               <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                 <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-green-800 dark:text-green-300">Facebook เชื่อมต่อแล้ว</p>
+                  <p className="text-sm font-medium text-green-800 dark:text-green-300">
+                    {isThai ? "Facebook เชื่อมต่อแล้ว" : "Facebook connected"}
+                  </p>
                   <p className="text-xs text-green-600 dark:text-green-400">{session?.user?.email}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
                 <div className="w-5 h-5 rounded-full border-2 border-red-400 dark:border-red-500 shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-red-700 dark:text-red-300">Google ยังไม่ได้เชื่อมต่อ</p>
-                  <p className="text-xs text-red-500 dark:text-red-400">จำเป็นสำหรับส่งออกไป Google Sheets</p>
+                  <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                    {isThai ? "Google ยังไม่ได้เชื่อมต่อ" : "Google not connected yet"}
+                  </p>
+                  <p className="text-xs text-red-500 dark:text-red-400">
+                    {isThai ? "จำเป็นสำหรับส่งออกไป Google Sheets" : "Required to export to Google Sheets"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -180,11 +201,13 @@ export default function ConnectPage() {
               disabled={loading}
             >
               <GoogleIcon />
-              เชื่อมต่อ Google (บังคับ)
+              {isThai ? "เชื่อมต่อ Google (บังคับ)" : "Connect Google (required)"}
             </Button>
 
             <p className="text-xs text-center text-gray-400 dark:text-gray-500 mt-4">
-              Google จำเป็นสำหรับการส่งออกข้อมูลไปยัง Google Sheets
+              {isThai
+                ? "Google จำเป็นสำหรับการส่งออกข้อมูลไปยัง Google Sheets"
+                : "Google is required to export data to Google Sheets."}
             </p>
           </div>
         </div>

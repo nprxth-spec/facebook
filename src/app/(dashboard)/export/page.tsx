@@ -18,7 +18,8 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
-import { th } from "date-fns/locale";
+import { th, enUS } from "date-fns/locale";
+import { useTheme } from "@/components/providers/ThemeProvider";
 
 // ---- Types ----
 interface AdAccount { id: string; accountId: string; name: string; isActive: boolean; currency?: string }
@@ -100,13 +101,13 @@ const FB_COLUMNS = [
 const SHEET_COLS = "ABCDEFGHIJKLMNOPQRST".split("");
 
 const DAYS = [
-  { id: 0, label: "อา" },
-  { id: 1, label: "จ" },
-  { id: 2, label: "อ" },
-  { id: 3, label: "พ" },
-  { id: 4, label: "พฤ" },
-  { id: 5, label: "ศ" },
-  { id: 6, label: "ส" },
+  { id: 0, labelTh: "อา", labelEn: "Su" },
+  { id: 1, labelTh: "จ", labelEn: "Mo" },
+  { id: 2, labelTh: "อ", labelEn: "Tu" },
+  { id: 3, labelTh: "พ", labelEn: "We" },
+  { id: 4, labelTh: "พฤ", labelEn: "Th" },
+  { id: 5, labelTh: "ศ", labelEn: "Fr" },
+  { id: 6, labelTh: "ส", labelEn: "Sa" },
 ];
 
 const DEFAULT_CONFIG: ExportConfig = {
@@ -178,12 +179,19 @@ function MultiSelectDropdown({
         )}
       >
         {loading ? (
-          <span className="flex items-center gap-2 text-gray-400"><Loader2 className="w-3.5 h-3.5 animate-spin" />กำลังโหลด...</span>
+          <span className="flex items-center gap-2 text-gray-400">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> กำลังโหลด...
+          </span>
         ) : error ? (
-          <span className="flex items-center gap-2 text-red-500"><AlertCircle className="w-3.5 h-3.5" />{error}</span>
+          <span className="flex items-center gap-2 text-red-500">
+            <AlertCircle className="w-3.5 h-3.5" />
+            {error}
+          </span>
         ) : (
           <span className={cn("truncate", !selected.length && "text-gray-400")}>
-            {!selected.length ? placeholder : selected.length === 1
+            {!selected.length
+              ? placeholder
+              : selected.length === 1
               ? options.find((o) => o.id === selected[0])?.name
               : `${selected.length} บัญชีที่เลือก`}
           </span>
@@ -203,37 +211,65 @@ function MultiSelectDropdown({
           <div className="p-2 border-b border-gray-100 dark:border-gray-700">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-              <input type="text" placeholder="ค้นหาบัญชี..." value={search} onChange={(e) => setSearch(e.target.value)}
+              <input
+                type="text"
+                placeholder="ค้นหาบัญชี..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-primary text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
           </div>
           <div className="flex gap-2 px-3 py-1.5 border-b border-gray-100 dark:border-gray-700 text-xs">
-            <button onClick={() => onChange(filtered.map((o) => o.id))} className="text-primary hover:underline">เลือกทั้งหมด</button>
+            <button onClick={() => onChange(filtered.map((o) => o.id))} className="text-primary hover:underline">
+              เลือกทั้งหมด
+            </button>
             <span className="text-gray-300">|</span>
-            <button onClick={() => onChange([])} className="text-gray-500 hover:underline">ล้าง</button>
-            {!!selected.length && <span className="ml-auto text-gray-500">{selected.length} เลือก</span>}
+            <button onClick={() => onChange([])} className="text-gray-500 hover:underline">
+              ล้าง
+            </button>
+            {!!selected.length && (
+              <span className="ml-auto text-gray-500">{selected.length} เลือก</span>
+            )}
           </div>
           <div className="max-h-52 overflow-y-auto p-1">
             {filtered.length === 0 ? (
               <div className="py-4 text-center text-sm text-gray-500">ไม่พบบัญชี</div>
-            ) : filtered.map((opt) => (
-              <div key={opt.id} onClick={() => toggle(opt.id)}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-              >
-                <div className={cn("w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
-                  selected.includes(opt.id) ? "bg-primary border-primary" : "border-gray-300 dark:border-gray-500"
-                )}>
-                  {selected.includes(opt.id) && <Check className="w-3 h-3 text-white" />}
+            ) : (
+              filtered.map((opt) => (
+                <div
+                  key={opt.id}
+                  onClick={() => toggle(opt.id)}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                >
+                  <div
+                    className={cn(
+                      "w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                      selected.includes(opt.id)
+                        ? "bg-primary border-primary"
+                        : "border-gray-300 dark:border-gray-500",
+                    )}
+                  >
+                    {selected.includes(opt.id) && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-900 dark:text-gray-100 truncate">
+                      {opt.name}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {opt.id}
+                      {opt.currency ? ` · ${opt.currency}` : ""}
+                    </p>
+                  </div>
+                  {!opt.isActive && (
+                    <Badge variant="secondary" className="text-xs ml-auto">
+                      ปิดใช้งาน
+                    </Badge>
+                  )}
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-gray-900 dark:text-gray-100 truncate">{opt.name}</p>
-                  <p className="text-xs text-gray-400">{opt.id}{opt.currency ? ` · ${opt.currency}` : ""}</p>
-                </div>
-                {!opt.isActive && <Badge variant="secondary" className="text-xs ml-auto">ปิดใช้งาน</Badge>}
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}
@@ -498,7 +534,17 @@ function TabDropdown({
 }
 
 // ---- Mini Calendar ----
-function MiniCalendar({ value, onChange }: { value: Date | null; onChange: (d: Date) => void }) {
+function MiniCalendar({
+  value,
+  onChange,
+  locale,
+  isThai,
+}: {
+  value: Date | null;
+  onChange: (d: Date) => void;
+  locale: typeof th;
+  isThai: boolean;
+}) {
   const [cur, setCur] = useState(new Date());
   const days = eachDayOfInterval({ start: startOfMonth(cur), end: endOfMonth(cur) });
   const firstDay = startOfMonth(cur).getDay();
@@ -506,34 +552,54 @@ function MiniCalendar({ value, onChange }: { value: Date | null; onChange: (d: D
   return (
     <div className="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg w-72">
       <div className="flex items-center justify-between mb-3">
-        <button onClick={() => setCur(subMonths(cur, 1))} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+        <button
+          onClick={() => setCur(subMonths(cur, 1))}
+          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+        >
           <ChevronLeft className="w-4 h-4" />
         </button>
         <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-          {format(cur, "MMMM yyyy", { locale: th })}
+          {format(cur, "MMMM yyyy", { locale })}
         </span>
-        <button onClick={() => setCur(addMonths(cur, 1))} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+        <button
+          onClick={() => setCur(addMonths(cur, 1))}
+          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+        >
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
       <div className="grid grid-cols-7 mb-1">
-        {["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"].map((d) => (
-          <div key={d} className="text-center text-xs text-gray-400 py-1">{d}</div>
+        {DAYS.map((d) => (
+          <div
+            key={d.id}
+            className="text-center text-xs text-gray-400 py-1"
+          >
+            {isThai ? d.labelTh : d.labelEn}
+          </div>
         ))}
       </div>
       <div className="grid grid-cols-7 gap-0.5">
-        {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
+        {Array.from({ length: firstDay }).map((_, i) => (
+          <div key={`e${i}`} />
+        ))}
         {days.map((day) => {
           const sel = value ? isSameDay(day, value) : false;
           const today = isSameDay(day, new Date());
           return (
-            <button key={day.toISOString()} onClick={() => onChange(day)}
-              className={cn("w-full aspect-square flex items-center justify-center text-xs rounded-lg transition-colors",
-                sel ? "bg-primary text-white"
-                  : today ? "bg-primary/10 dark:bg-primary/30 text-primary dark:text-primary font-medium"
-                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            <button
+              key={day.toISOString()}
+              onClick={() => onChange(day)}
+              className={cn(
+                "w-full aspect-square flex items-center justify-center text-xs rounded-lg transition-colors",
+                sel
+                  ? "bg-primary text-white"
+                  : today
+                    ? "bg-primary/10 dark:bg-primary/30 text-primary dark:text-primary font-medium"
+                    : "hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300",
               )}
-            >{format(day, "d")}</button>
+            >
+              {format(day, "d")}
+            </button>
           );
         })}
       </div>
@@ -634,6 +700,10 @@ export default function ExportPage() {
   const [isExporting, setIsExporting] = useState(false);
   const calRef = useRef<HTMLDivElement>(null);
 
+  const { language } = useTheme();
+  const isThai = language === "th";
+  const locale = isThai ? th : enUS;
+
   // fetch ad accounts: ใช้ได้เฉพาะบัญชีที่เลือกใช้งานใน Settings (ManagerAccounts ที่ isActive = true)
   useEffect(() => {
     fetch("/api/manager-accounts")
@@ -713,7 +783,10 @@ export default function ExportPage() {
   };
 
   const saveConfig = async () => {
-    if (!cfg.name.trim()) { toast.error("กรุณาใส่ชื่อการตั้งค่า"); return; }
+    if (!cfg.name.trim()) {
+      toast.error(isThai ? "กรุณาใส่ชื่อการตั้งค่า" : "Please enter a configuration name");
+      return;
+    }
     const sheetName = sheets.find((s) => s.id === cfg.googleSheetId)?.name ?? "";
 
     // หากเป็นแมนนวล ให้ล้างค่า schedule ออกเพื่อให้ระบบรู้ว่าเป็นประเภทแมนนวลถาวร
@@ -732,13 +805,15 @@ export default function ExportPage() {
       setSavedConfigs((p) => [saved, ...p]);
       setActiveConfigId(saved.id);
     }
-    toast.success("บันทึกการตั้งค่าสำเร็จ");
+    toast.success(isThai ? "บันทึกการตั้งค่าสำเร็จ" : "Configuration saved");
   };
 
   const loadConfig = (c: ExportConfig) => {
     setCfg(c);
     setActiveConfigId(c.id ?? null);
-    toast.info(`โหลดการตั้งค่า "${c.name}" แล้ว`);
+    toast.info(
+      isThai ? `โหลดการตั้งค่า "${c.name}" แล้ว` : `Loaded configuration "${c.name}"`,
+    );
   };
 
   const deleteConfig = async () => {
@@ -770,16 +845,37 @@ export default function ExportPage() {
 
       toast.success(newIsAuto ? "เปิดใช้งานส่งออกอัตโนมัติแล้ว" : "ปิดใช้งานส่งออกอัตโนมัติแล้ว");
     } catch (error) {
-      toast.error("เกิดข้อผิดพลาดในการอัปเดตสถานะ");
+      toast.error(
+        isThai
+          ? "เกิดข้อผิดพลาดในการอัปเดตสถานะ"
+          : "An error occurred while updating status",
+      );
     }
   };
 
   const handleExport = async () => {
-    if (!cfg.adAccountIds.length) { toast.error("กรุณาเลือกบัญชีโฆษณา"); return; }
-    if (!cfg.googleSheetId) { toast.error("กรุณาเลือก Google Sheet"); return; }
-    if (!cfg.sheetTab) { toast.error("กรุณาเลือก Sheet Tab"); return; }
-    if (!cfg.columnMapping.some((m) => m.fbCol && m.sheetCol)) { toast.error("กรุณากำหนด Column Mapping"); return; }
-    if (!selectedDate) { toast.error("กรุณาเลือกวันที่ข้อมูล"); return; }
+    if (!cfg.adAccountIds.length) {
+      toast.error(isThai ? "กรุณาเลือกบัญชีโฆษณา" : "Please select at least one ad account");
+      return;
+    }
+    if (!cfg.googleSheetId) {
+      toast.error(isThai ? "กรุณาเลือก Google Sheet" : "Please select a Google Sheet file");
+      return;
+    }
+    if (!cfg.sheetTab) {
+      toast.error(isThai ? "กรุณาเลือก Sheet Tab" : "Please select a Sheet tab");
+      return;
+    }
+    if (!cfg.columnMapping.some((m) => m.fbCol && m.sheetCol)) {
+      toast.error(
+        isThai ? "กรุณากำหนด Column Mapping" : "Please configure at least one column mapping",
+      );
+      return;
+    }
+    if (!selectedDate) {
+      toast.error(isThai ? "กรุณาเลือกวันที่ข้อมูล" : "Please choose a data date");
+      return;
+    }
 
     setIsExporting(true);
     try {
@@ -799,9 +895,19 @@ export default function ExportPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Export failed");
-      toast.success(`ส่งออกสำเร็จ! ${data.rowCount.toLocaleString()} แถว`);
+      toast.success(
+        isThai
+          ? `ส่งออกสำเร็จ! ${data.rowCount.toLocaleString()} แถว`
+          : `Export successful! ${data.rowCount.toLocaleString()} rows`,
+      );
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "เกิดข้อผิดพลาด");
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : isThai
+            ? "เกิดข้อผิดพลาด"
+            : "An error occurred",
+      );
     } finally {
       setIsExporting(false);
     }
@@ -812,8 +918,14 @@ export default function ExportPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">ส่งออกข้อมูล</h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">ส่งข้อมูลโฆษณา Facebook ไปยัง Google Sheets</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          {isThai ? "ส่งออกข้อมูล" : "Export data"}
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+          {isThai
+            ? "ส่งข้อมูลโฆษณา Facebook ไปยัง Google Sheets"
+            : "Export your Facebook Ads data to Google Sheets."}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -822,14 +934,16 @@ export default function ExportPage() {
           {/* 1. Ad Accounts */}
           <Card>
             <CardHeader className="pb-4">
-              <CardTitle className="text-base">1. เลือกบัญชีโฆษณา</CardTitle>
+              <CardTitle className="text-base">
+                {isThai ? "1. เลือกบัญชีโฆษณา" : "1. Select ad accounts"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <MultiSelectDropdown
                 options={adAccounts}
                 selected={cfg.adAccountIds}
                 onChange={(ids) => updateCfg("adAccountIds", ids)}
-                placeholder="เลือกบัญชีโฆษณา..."
+                placeholder={isThai ? "เลือกบัญชีโฆษณา..." : "Choose ad accounts..."}
                 loading={accountsLoading}
                 error={accountsError}
               />
@@ -854,30 +968,42 @@ export default function ExportPage() {
           {/* 2. Google Sheet */}
           <Card>
             <CardHeader className="pb-4">
-              <CardTitle className="text-base">2. เลือก Google Sheet</CardTitle>
+              <CardTitle className="text-base">
+                {isThai ? "2. เลือก Google Sheet" : "2. Select Google Sheet"}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label>ไฟล์ Google Sheet</Label>
+                  <Label>{isThai ? "ไฟล์ Google Sheet" : "Google Sheet file"}</Label>
                   <SheetDropdown
                     sheets={sheets}
                     value={cfg.googleSheetId}
                     onChange={(id, name) =>
                       setCfg((p) => ({ ...p, googleSheetId: id, googleSheetName: name, sheetTab: "" }))
                     }
-                    placeholder="เลือกไฟล์ google sheet"
+                    placeholder={
+                      isThai ? "เลือกไฟล์ Google Sheet" : "Choose a Google Sheet file"
+                    }
                     loading={sheetsLoading}
                     error={sheetsError || undefined}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>ชีต (Tab)</Label>
+                  <Label>{isThai ? "ชีต (Tab)" : "Sheet tab"}</Label>
                   <TabDropdown
                     tabs={tabs}
                     value={cfg.sheetTab}
                     onChange={(val) => updateCfg("sheetTab", val)}
-                    placeholder={!cfg.googleSheetId ? "เลือกไฟล์ก่อน" : "เลือกชีต..."}
+                    placeholder={
+                      !cfg.googleSheetId
+                        ? isThai
+                          ? "เลือกไฟล์ก่อน"
+                          : "Choose a file first"
+                        : isThai
+                          ? "เลือกชีต..."
+                          : "Choose a sheet..."
+                    }
                     disabled={!cfg.googleSheetId}
                     loading={tabsLoading}
                   />
@@ -885,8 +1011,16 @@ export default function ExportPage() {
               </div>
               {selectedSheet && (
                 <p className="text-xs text-gray-400">
-                  ไฟล์ที่เลือก: <span className="font-medium text-gray-600 dark:text-gray-300">{selectedSheet.name}</span>
-                  {selectedSheet.modifiedTime && ` · แก้ไขล่าสุด ${format(new Date(selectedSheet.modifiedTime), "d MMM yyyy", { locale: th })}`}
+                  {isThai ? "ไฟล์ที่เลือก:" : "Selected file:"}{" "}
+                  <span className="font-medium text-gray-600 dark:text-gray-300">
+                    {selectedSheet.name}
+                  </span>
+                  {selectedSheet.modifiedTime &&
+                    ` · ${
+                      isThai ? "แก้ไขล่าสุด" : "Last modified"
+                    } ${format(new Date(selectedSheet.modifiedTime), "d MMM yyyy", {
+                      locale,
+                    })}`}
                 </p>
               )}
             </CardContent>
@@ -897,11 +1031,17 @@ export default function ExportPage() {
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base">3. แมพคอลัมน์</CardTitle>
-                  <CardDescription className="mt-1">กำหนดข้อมูล Facebook → คอลัมน์ Sheet</CardDescription>
+                  <CardTitle className="text-base">
+                    {isThai ? "3. แมพคอลัมน์" : "3. Column mapping"}
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    {isThai
+                      ? "กำหนดข้อมูล Facebook → คอลัมน์ Sheet"
+                      : "Map Facebook fields → Sheet columns"}
+                  </CardDescription>
                 </div>
                 <Button onClick={addMapping} size="sm" variant="outline" className="gap-1">
-                  <Plus className="w-3.5 h-3.5" /> เพิ่ม
+                  <Plus className="w-3.5 h-3.5" /> {isThai ? "เพิ่ม" : "Add"}
                 </Button>
               </div>
             </CardHeader>
@@ -915,19 +1055,31 @@ export default function ExportPage() {
                         value={m.fbCol}
                         onChange={(e) => updateMapping(idx, "fbCol", e.target.value)}
                       >
-                        <option value="">คอลัมน์ Facebook...</option>
-                        <option value={SKIP_FB_COL}>skip (ว่าง)</option>
+                        <option value="">
+                          {isThai ? "คอลัมน์ Facebook..." : "Facebook column..."}
+                        </option>
+                        <option value={SKIP_FB_COL}>
+                          {isThai ? "skip (ว่าง)" : "skip (empty)"}
+                        </option>
                         {FB_COLUMNS.map((c) => (
                           <option key={c} value={c}>
                             {c}
                           </option>
                         ))}
                       </select>
-                      <select className="h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
-                        value={m.sheetCol} onChange={(e) => updateMapping(idx, "sheetCol", e.target.value)}
+                      <select
+                        className="h-9 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
+                        value={m.sheetCol}
+                        onChange={(e) => updateMapping(idx, "sheetCol", e.target.value)}
                       >
-                        <option value="">คอลัมน์ Sheet...</option>
-                        {SHEET_COLS.map((c) => <option key={c} value={c}>คอลัมน์ {c}</option>)}
+                        <option value="">
+                          {isThai ? "คอลัมน์ Sheet..." : "Sheet column..."}
+                        </option>
+                        {SHEET_COLS.map((c) => (
+                          <option key={c} value={c}>
+                            {isThai ? `คอลัมน์ ${c}` : `Column ${c}`}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <button onClick={() => removeMapping(idx)} className="p-2 text-gray-400 hover:text-red-500 transition-colors"
@@ -939,7 +1091,9 @@ export default function ExportPage() {
               </div>
               {cfg.columnMapping.some((m) => m.fbCol && m.sheetCol) && (
                 <div className="mt-3 p-3 bg-primary/10 dark:bg-primary/20 rounded-lg">
-                  <p className="text-xs text-primary dark:text-primary font-medium">ตัวอย่าง:</p>
+                  <p className="text-xs text-primary dark:text-primary font-medium">
+                    {isThai ? "ตัวอย่าง:" : "Example:"}
+                  </p>
                   <p className="text-xs text-primary dark:text-primary mt-1">
                     {cfg.columnMapping.filter((m) => m.fbCol && m.sheetCol).slice(0, 4).map((m) => `${m.fbCol}→${m.sheetCol}`).join(", ")}
                     {cfg.columnMapping.filter((m) => m.fbCol && m.sheetCol).length > 4 && " ..."}
@@ -956,11 +1110,13 @@ export default function ExportPage() {
           {/* Save & Saved configs */}
           <Card>
             <CardHeader className="pb-4 flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">บันทึกการตั้งค่า</CardTitle>
+              <CardTitle className="text-base">
+                {isThai ? "บันทึกการตั้งค่า" : "Saved configurations"}
+              </CardTitle>
               <button
                 onClick={() => setIsLogsOpen(true)}
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
-                title="ดูประวัติการส่งออก"
+                title={isThai ? "ดูประวัติการส่งออก" : "View export history"}
               >
                 <FileClock className="w-5 h-5 text-gray-400 group-hover:text-primary" />
               </button>
@@ -970,7 +1126,9 @@ export default function ExportPage() {
               {/* 1. Saved configs (Moved to top) */}
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <Label className="text-sm font-medium text-gray-900 dark:text-gray-100">การตั้งค่าที่บันทึกไว้</Label>
+                  <Label className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {isThai ? "การตั้งค่าที่บันทึกไว้" : "Saved configurations"}
+                  </Label>
                   {savedConfigs.length > 0 && (
                     <span className="text-[10px] text-gray-400">({savedConfigs.length})</span>
                   )}
@@ -1002,19 +1160,24 @@ export default function ExportPage() {
 
                           <div className="flex flex-col gap-0.5 mt-1">
                             <p className="text-[10px] text-gray-500 truncate leading-normal">
-                              {c.adAccountIds?.length ?? 0} บัญชี · {c.googleSheetName || "—"}
+                              {c.adAccountIds?.length ?? 0}{" "}
+                              {isThai ? "บัญชี" : "accounts"} · {c.googleSheetName || "—"}
                             </p>
                             <div className="flex items-center gap-1.5">
                               <span className={cn("text-[9px] font-semibold uppercase tracking-wider px-1 rounded-sm",
                                 c.autoSchedule ? "bg-primary/20 text-primary dark:bg-primary/40 dark:text-primary" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
                               )}>
-                                {c.autoSchedule ? "อัตโนมัติ" : "แมนนวล"}
+                                {c.autoSchedule
+                                  ? isThai ? "อัตโนมัติ" : "Automatic"
+                                  : isThai ? "แมนนวล" : "Manual"}
                               </span>
                               {c.autoSchedule && (
                                 <div className="flex items-center gap-1">
                                   <div className={cn("h-1.5 w-1.5 rounded-full", c.isAuto ? "bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]" : "bg-gray-300")} />
                                   <span className={cn("text-[10px]", c.isAuto ? "text-green-600 font-medium" : "text-gray-400")}>
-                                    {c.isAuto ? "เปิดใช้งาน" : "ปิดการทำงาน"}
+                                    {c.isAuto
+                                      ? isThai ? "เปิดใช้งาน" : "Enabled"
+                                      : isThai ? "ปิดการทำงาน" : "Disabled"}
                                   </span>
                                 </div>
                               )}
@@ -1025,7 +1188,18 @@ export default function ExportPage() {
                         <div className="flex flex-col items-end justify-between min-h-[42px] shrink-0 border-l border-gray-100 dark:border-gray-800 pl-3 ml-1">
                           <div className="h-4 flex items-center justify-end w-full">
                             {c.autoSchedule ? (
-                              <div onClick={(e) => e.stopPropagation()} title={c.isAuto ? "ปิดส่งออกอัตโนมัติ" : "เปิดส่งออกอัตโนมัติ"}>
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                title={
+                                  c.isAuto
+                                    ? isThai
+                                      ? "ปิดส่งออกอัตโนมัติ"
+                                      : "Disable automatic export"
+                                    : isThai
+                                      ? "เปิดส่งออกอัตโนมัติ"
+                                      : "Enable automatic export"
+                                }
+                              >
                                 <Switch
                                   className="scale-[0.6] origin-right data-[state=checked]:bg-green-500"
                                   checked={c.isAuto}
@@ -1041,7 +1215,9 @@ export default function ExportPage() {
                             setConfigToDelete({ id: c.id!, name: c.name });
                             setIsDeleteConfirmOpen(true);
                           }}
-                            className="text-gray-400 hover:text-red-500 transition-all p-1 -mr-1" title="ลบ">
+                            className="text-gray-400 hover:text-red-500 transition-all p-1 -mr-1"
+                            title={isThai ? "ลบ" : "Delete"}
+                          >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
@@ -1055,12 +1231,28 @@ export default function ExportPage() {
               <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
                 <div className="space-y-3">
                   <div className="space-y-1.5">
-                    <Label>ชื่อการตั้งค่าใหม่ / อัปเดต</Label>
-                    <Input placeholder="เช่น รายงานประจำเดือน..." value={cfg.name} onChange={(e) => updateCfg("name", e.target.value)} />
+                    <Label>
+                      {isThai
+                        ? "ชื่อการตั้งค่าใหม่ / อัปเดต"
+                        : "New / updated configuration name"}
+                    </Label>
+                    <Input
+                      placeholder={
+                        isThai ? "เช่น รายงานประจำเดือน..." : "e.g. Monthly report..."
+                      }
+                      value={cfg.name}
+                      onChange={(e) => updateCfg("name", e.target.value)}
+                    />
                   </div>
                   <Button onClick={saveConfig} variant="outline" className="w-full gap-2">
                     <Save className="w-4 h-4" />
-                    {activeConfigId ? "อัปเดตการตั้งค่าปัจจุบัน" : "บันทึกสร้างใหม่"}
+                    {activeConfigId
+                      ? isThai
+                        ? "อัปเดตการตั้งค่าปัจจุบัน"
+                        : "Update current configuration"
+                      : isThai
+                        ? "บันทึกสร้างใหม่"
+                        : "Save as new"}
                   </Button>
                 </div>
               </div>
@@ -1071,15 +1263,23 @@ export default function ExportPage() {
           {/* 4. Write Mode + Schedule */}
           <Card>
             <CardHeader className="pb-4">
-              <CardTitle className="text-base">4. การเขียนข้อมูล & ตั้งเวลา</CardTitle>
+              <CardTitle className="text-base">
+                {isThai ? "4. การเขียนข้อมูล & ตั้งเวลา" : "4. Write mode & schedule"}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="space-y-2">
-                <Label>วิธีการเขียน</Label>
+                <Label>{isThai ? "วิธีการเขียน" : "Write mode"}</Label>
                 <div className="space-y-1">
                   {([
-                    { id: "append", label: "เขียนต่อแถว" },
-                    { id: "overwrite", label: "เขียนทับทั้งหมด" },
+                    {
+                      id: "append",
+                      label: isThai ? "เขียนต่อแถว" : "Append rows",
+                    },
+                    {
+                      id: "overwrite",
+                      label: isThai ? "เขียนทับทั้งหมด" : "Overwrite all",
+                    },
                   ] as const).map((opt) => (
                     <button
                       key={opt.id}
@@ -1110,11 +1310,17 @@ export default function ExportPage() {
               </div>
 
               <div className="space-y-2 pt-2">
-                <Label>รูปแบบการทำงาน</Label>
+                <Label>{isThai ? "รูปแบบการทำงาน" : "Execution mode"}</Label>
                 <div className="space-y-1">
                   {([
-                    { id: false, label: "ส่งออกแบบแมนวล" },
-                    { id: true, label: "ส่งออกอัตโนมัติ" },
+                    {
+                      id: false,
+                      label: isThai ? "ส่งออกแบบแมนวล" : "Manual export",
+                    },
+                    {
+                      id: true,
+                      label: isThai ? "ส่งออกอัตโนมัติ" : "Automatic export",
+                    },
                   ] as const).map((opt) => (
                     <button
                       key={String(opt.id)}
@@ -1152,7 +1358,9 @@ export default function ExportPage() {
               {cfg.isAuto && (
                 <div className="space-y-3 pt-2 border-t dark:border-gray-800">
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-gray-500">เวลาส่งออก (24 ชม.)</Label>
+                    <Label className="text-xs text-gray-500">
+                      {isThai ? "เวลาส่งออก (24 ชม.)" : "Export time (24h)"}
+                    </Label>
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-gray-400" />
                       <div className="flex items-center gap-1">
@@ -1188,7 +1396,9 @@ export default function ExportPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-gray-500">ความถี่ในการส่งออก</Label>
+                    <Label className="text-xs text-gray-500">
+                      {isThai ? "ความถี่ในการส่งออก" : "Export frequency"}
+                    </Label>
                     <div className="flex gap-2">
                       <Button
                         type="button"
@@ -1197,7 +1407,7 @@ export default function ExportPage() {
                         onClick={() => updateCfg("autoDays", [0, 1, 2, 3, 4, 5, 6])}
                         className={cn("text-xs h-8 px-3", cfg.autoDays.length === 7 && "bg-primary/20 text-primary hover:bg-primary/30 dark:bg-primary/40 dark:text-primary")}
                       >
-                        ทุกวัน
+                        {isThai ? "ทุกวัน" : "Every day"}
                       </Button>
                       <Button
                         type="button"
@@ -1208,7 +1418,7 @@ export default function ExportPage() {
                         }}
                         className={cn("text-xs h-8 px-3", cfg.autoDays.length < 7 && "bg-primary/20 text-primary hover:bg-primary/30 dark:bg-primary/40 dark:text-primary")}
                       >
-                        เลือกวัน
+                        {isThai ? "เลือกวัน" : "Pick days"}
                       </Button>
                     </div>
 
@@ -1231,7 +1441,7 @@ export default function ExportPage() {
                                 : "bg-white border-gray-200 text-gray-500 hover:border-gray-300 dark:bg-gray-800 dark:border-gray-700"
                             )}
                           >
-                            {day.label}
+                            {isThai ? day.labelTh : day.labelEn}
                           </button>
                         ))}
                       </div>
@@ -1245,7 +1455,9 @@ export default function ExportPage() {
           {/* 5. Date */}
           <Card>
             <CardHeader className="pb-4">
-              <CardTitle className="text-base">5. เลือกวันที่ข้อมูล</CardTitle>
+              <CardTitle className="text-base">
+                {isThai ? "5. เลือกวันที่ข้อมูล" : "5. Choose data date"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {cfg.isAuto ? (
@@ -1255,9 +1467,15 @@ export default function ExportPage() {
                     onChange={(e) => updateCfg("dateRange", e.target.value)}
                     className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    <option value="today">วันนี้ (Today)</option>
-                    <option value="yesterday">เมื่อวาน (Yesterday)</option>
-                    <option value="last_7_days">7 วันที่ผ่านมา (Last 7 Days)</option>
+                    <option value="today">
+                      {isThai ? "วันนี้ (Today)" : "Today"}
+                    </option>
+                    <option value="yesterday">
+                      {isThai ? "เมื่อวาน (Yesterday)" : "Yesterday"}
+                    </option>
+                    <option value="last_7_days">
+                      {isThai ? "7 วันที่ผ่านมา (Last 7 Days)" : "Last 7 days"}
+                    </option>
                   </select>
                 </div>
               ) : (
@@ -1268,8 +1486,10 @@ export default function ExportPage() {
                   >
                     <Calendar className="h-4 w-4 text-gray-500" />
                     {selectedDate
-                      ? format(selectedDate, "d MMMM yyyy", { locale: th })
-                      : "เลือกวันที่..."}
+                      ? format(selectedDate, "d MMMM yyyy", { locale })
+                      : isThai
+                        ? "เลือกวันที่..."
+                        : "Select a date..."}
                     {selectedDate && (
                       <span
                         onClick={(e) => {
@@ -1286,6 +1506,8 @@ export default function ExportPage() {
                     <div className="absolute z-50 mt-1">
                       <MiniCalendar
                         value={selectedDate}
+                        locale={locale}
+                        isThai={isThai}
                         onChange={(d) => {
                           setSelectedDate(d);
                           setShowCal(false);
@@ -1303,19 +1525,45 @@ export default function ExportPage() {
             <CardContent className="p-5 space-y-3">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                <span className="font-semibold text-gray-900 dark:text-gray-100">ส่งออกข้อมูล</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">
+                  {isThai ? "ส่งออกข้อมูล" : "Export data"}
+                </span>
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <p>บัญชี: {cfg.adAccountIds.length} รายการ</p>
-                <p>วันที่: {selectedDate ? format(selectedDate, "d MMM yyyy", { locale: th }) : "—"}</p>
-                <p>ชีต: {cfg.sheetTab || "—"}</p>
-                <p>การเขียน: {cfg.writeMode === "append" ? "เขียนต่อ" : "เขียนทับ"}</p>
+                <p>
+                  {isThai ? "บัญชี" : "Accounts"}: {cfg.adAccountIds.length}{" "}
+                  {isThai ? "รายการ" : "selected"}
+                </p>
+                <p>
+                  {isThai ? "วันที่" : "Date"}:{" "}
+                  {selectedDate ? format(selectedDate, "d MMM yyyy", { locale }) : "—"}
+                </p>
+                <p>
+                  {isThai ? "ชีต" : "Sheet"}: {cfg.sheetTab || "—"}
+                </p>
+                <p>
+                  {isThai ? "การเขียน" : "Write mode"}:{" "}
+                  {cfg.writeMode === "append"
+                    ? isThai
+                      ? "เขียนต่อ"
+                      : "Append"
+                    : isThai
+                      ? "เขียนทับ"
+                      : "Overwrite"}
+                </p>
               </div>
               <Button onClick={handleExport} className="w-full gap-2" disabled={isExporting}>
-                {isExporting
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> กำลังส่งออก...</>
-                  : <><Play className="w-4 h-4" /> ส่งออกทันที</>
-                }
+                {isExporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />{" "}
+                    {isThai ? "กำลังส่งออก..." : "Exporting..."}
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4" />{" "}
+                    {isThai ? "ส่งออกทันที" : "Export now"}
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
@@ -1325,9 +1573,12 @@ export default function ExportPage() {
             <DialogContent className="max-w-6xl h-[90vh] flex flex-col p-0 overflow-hidden">
               <DialogHeader className="px-6 py-4 border-b shrink-0">
                 <div className="flex items-center justify-between">
-                  <DialogTitle className="text-xl font-bold">ประวัติการส่งออก (Logs)</DialogTitle>
+                  <DialogTitle className="text-xl font-bold">
+                    {isThai ? "ประวัติการส่งออก (Logs)" : "Export history (Logs)"}
+                  </DialogTitle>
                   <Button variant="outline" size="sm" onClick={fetchLogs} className="gap-2 h-8 mr-6">
-                    <RefreshCw className={cn("w-3.5 h-3.5", logsLoading && "animate-spin")} /> รีเฟรช
+                    <RefreshCw className={cn("w-3.5 h-3.5", logsLoading && "animate-spin")} />{" "}
+                    {isThai ? "รีเฟรช" : "Refresh"}
                   </Button>
                 </div>
               </DialogHeader>
@@ -1336,10 +1587,30 @@ export default function ExportPage() {
                 {/* Stats Summary */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 shrink-0">
                   {[
-                    { label: "ทั้งหมด", value: logTotals.total, icon: FileSpreadsheet, color: "text-primary bg-primary/10 dark:bg-primary/20" },
-                    { label: "สำเร็จ", value: logTotals.success, icon: CheckCircle2, color: "text-green-600 bg-green-50 dark:bg-green-900/20" },
-                    { label: "ล้มเหลว", value: logTotals.error, icon: XCircle, color: "text-red-600 bg-red-50 dark:bg-red-900/20" },
-                    { label: "แถวทั้งหมด", value: logTotals.rows.toLocaleString(), icon: RefreshCw, color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20" },
+                    {
+                      label: isThai ? "ทั้งหมด" : "TOTAL",
+                      value: logTotals.total,
+                      icon: FileSpreadsheet,
+                      color: "text-primary bg-primary/10 dark:bg-primary/20",
+                    },
+                    {
+                      label: isThai ? "สำเร็จ" : "SUCCESS",
+                      value: logTotals.success,
+                      icon: CheckCircle2,
+                      color: "text-green-600 bg-green-50 dark:bg-green-900/20",
+                    },
+                    {
+                      label: isThai ? "ล้มเหลว" : "FAILED",
+                      value: logTotals.error,
+                      icon: XCircle,
+                      color: "text-red-600 bg-red-50 dark:bg-red-900/20",
+                    },
+                    {
+                      label: isThai ? "แถวทั้งหมด" : "ROWS",
+                      value: logTotals.rows.toLocaleString(),
+                      icon: RefreshCw,
+                      color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20",
+                    },
                   ].map((s) => (
                     <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3">
                       <div className="flex items-center gap-3">
@@ -1360,7 +1631,9 @@ export default function ExportPage() {
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <Input
-                      placeholder="ค้นหาชื่อการตั้งค่า..."
+                      placeholder={
+                        isThai ? "ค้นหาชื่อการตั้งค่า..." : "Search by configuration name..."
+                      }
                       className="pl-9 h-9 text-sm"
                       value={logsSearch}
                       onChange={(e) => setLogsSearch(e.target.value)}
@@ -1373,7 +1646,11 @@ export default function ExportPage() {
                           className={cn("px-3 py-1.5 font-medium transition-colors border-r last:border-r-0 dark:border-gray-700",
                             logsFilterType === t ? "bg-primary text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
                           )}>
-                          {t === "all" ? "ทั้งหมด" : t === "manual" ? "แมนวล" : "อัตโนมัติ"}
+                          {t === "all"
+                            ? isThai ? "ทั้งหมด" : "All"
+                            : t === "manual"
+                              ? isThai ? "แมนวล" : "Manual"
+                              : isThai ? "อัตโนมัติ" : "Automatic"}
                         </button>
                       ))}
                     </div>
@@ -1383,7 +1660,11 @@ export default function ExportPage() {
                           className={cn("px-3 py-1.5 font-medium transition-colors border-r last:border-r-0 dark:border-gray-700",
                             logsFilterStatus === s ? "bg-primary text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
                           )}>
-                          {s === "all" ? "ทั้งหมด" : s === "success" ? "สำเร็จ" : "ล้มเหลว"}
+                          {s === "all"
+                            ? isThai ? "ทั้งหมด" : "All"
+                            : s === "success"
+                              ? isThai ? "สำเร็จ" : "Succeeded"
+                              : isThai ? "ล้มเหลว" : "Failed"}
                         </button>
                       ))}
                     </div>
@@ -1395,8 +1676,16 @@ export default function ExportPage() {
                   <table className="w-full text-sm border-collapse">
                     <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 shadow-sm">
                       <tr className="border-b border-gray-200 dark:border-gray-800">
-                        {["วันเวลา", "ประเภท", "ชื่อการตั้งค่า / ชีต", "บัญชี", "แถว", "วันที่ข้อมูล", "สถานะ"].map((h) => (
-                          <th key={h} className="text-left px-4 py-2.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                        {(isThai
+                          ? ["วันเวลา", "ประเภท", "ชื่อการตั้งค่า / ชีต", "บัญชี", "แถว", "วันที่ข้อมูล", "สถานะ"]
+                          : ["DATE / TIME", "TYPE", "CONFIG / SHEET", "ACCOUNTS", "ROWS", "DATA DATE", "STATUS"]
+                        ).map((h) => (
+                          <th
+                            key={h}
+                            className="text-left px-4 py-2.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap"
+                          >
+                            {h}
+                          </th>
                         ))}
                       </tr>
                     </thead>
@@ -1409,9 +1698,14 @@ export default function ExportPage() {
                         </tr>
                       ) : !logsData?.logs?.length ? (
                         <tr>
-                          <td colSpan={7} className="px-4 py-20 text-center text-gray-500 dark:text-gray-400">
+                          <td
+                            colSpan={7}
+                            className="px-4 py-20 text-center text-gray-500 dark:text-gray-400"
+                          >
                             <Filter className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                            <p className="text-sm">ไม่พบประวัติการส่งออก</p>
+                            <p className="text-sm">
+                              {isThai ? "ไม่พบประวัติการส่งออก" : "No export history yet"}
+                            </p>
                           </td>
                         </tr>
                       ) : (
@@ -1421,16 +1715,21 @@ export default function ExportPage() {
                               <div className="flex items-center gap-2">
                                 <Clock className="w-3.5 h-3.5 text-gray-400" />
                                 <div>
-                                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                    {format(new Date(log.createdAt), "d MMM yyyy", { locale: th })}
-                                  </p>
+                              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                {format(new Date(log.createdAt), "d MMM yyyy", { locale })}
+                              </p>
                                   <p className="text-xs text-gray-400">{format(new Date(log.createdAt), "HH:mm")}</p>
                                 </div>
                               </div>
                             </td>
                             <td className="px-4 py-3">
-                              <Badge variant={log.exportType === "auto" ? "default" : "secondary"} className="text-[10px] h-5 px-1.5 uppercase font-bold tracking-tighter">
-                                {log.exportType === "auto" ? "AUTO" : "MANUAL"}
+                              <Badge
+                                variant={log.exportType === "auto" ? "default" : "secondary"}
+                                className="text-[10px] h-5 px-1.5 uppercase font-bold tracking-tighter"
+                              >
+                                {log.exportType === "auto"
+                                  ? isThai ? "AUTO" : "AUTO"
+                                  : isThai ? "MANUAL" : "MANUAL"}
                               </Badge>
                             </td>
                             <td className="px-4 py-3">
@@ -1449,18 +1748,24 @@ export default function ExportPage() {
                               {log.dataDate ? (
                                 <div className="flex items-center gap-1 text-xs font-medium text-gray-500">
                                   <Calendar className="w-3.5 h-3.5" />
-                                  {format(new Date(log.dataDate), "d MMM yyyy", { locale: th })}
+                                  {format(new Date(log.dataDate), "d MMM yyyy", { locale })}
                                 </div>
-                              ) : "—"}
+                              ) : (
+                                "—"
+                              )}
                             </td>
                             <td className="px-4 py-3">
                               {log.status === "success" ? (
                                 <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> SUCCESS
+                                  <CheckCircle2 className="w-3.5 h-3.5" />{" "}
+                                  {isThai ? "SUCCESS" : "SUCCESS"}
                                 </div>
                               ) : (
-                                <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400" title={log.error ?? ""}>
-                                  <XCircle className="w-3.5 h-3.5" /> ERROR
+                                <div
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                  title={log.error ?? ""}
+                                >
+                                  <XCircle className="w-3.5 h-3.5" /> {isThai ? "ERROR" : "ERROR"}
                                 </div>
                               )}
                             </td>
@@ -1475,7 +1780,9 @@ export default function ExportPage() {
                 {logsTotalPages > 1 && (
                   <div className="px-6 py-3 border-t bg-gray-50 dark:bg-gray-900 flex items-center justify-between shrink-0">
                     <p className="text-xs text-gray-500">
-                      หน้า {logsPage} จาก {logsTotalPages} ({logsData?.total} รายการ)
+                      {isThai ? "หน้า" : "Page"} {logsPage} {isThai ? "จาก" : "of"}{" "}
+                      {logsTotalPages} ({logsData?.total}{" "}
+                      {isThai ? "รายการ" : "entries"})
                     </p>
                     <div className="flex items-center gap-1">
                       <Button variant="outline" size="sm" onClick={() => setLogsPage(p => Math.max(1, p - 1))} disabled={logsPage === 1} className="h-8 w-8 p-0">
@@ -1499,9 +1806,15 @@ export default function ExportPage() {
               <Trash2 className="w-5 h-5 text-red-600" />
             </div>
             <div className="flex-1 pt-0.5">
-              <DialogTitle className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1 text-left">ลบการตั้งค่า?</DialogTitle>
+              <DialogTitle className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1 text-left">
+                {isThai ? "ลบการตั้งค่า?" : "Delete configuration?"}
+              </DialogTitle>
               <p className="text-sm text-gray-500 dark:text-gray-400 text-left leading-snug">
-                คุณแน่ใจหรือไม่ที่จะลบ <span className="font-semibold text-gray-900 dark:text-gray-100">"{configToDelete?.name}"</span>
+                {isThai ? "คุณแน่ใจหรือไม่ที่จะลบ" : "Are you sure you want to delete"}{" "}
+                <span className="font-semibold text-gray-900 dark:text-gray-100">
+                  "{configToDelete?.name}"
+                </span>
+                ?
               </p>
             </div>
           </div>
@@ -1512,7 +1825,7 @@ export default function ExportPage() {
               className="px-4 h-9 rounded-lg text-gray-500 font-medium hover:bg-gray-100 dark:hover:bg-gray-800"
               onClick={() => setIsDeleteConfirmOpen(false)}
             >
-              ยกเลิก
+              {isThai ? "ยกเลิก" : "Cancel"}
             </Button>
             <Button
               variant="destructive"
@@ -1520,7 +1833,7 @@ export default function ExportPage() {
               className="px-4 h-9 rounded-lg bg-red-600 hover:bg-red-700 font-bold"
               onClick={deleteConfig}
             >
-              ตกลง
+              {isThai ? "ตกลง" : "Confirm"}
             </Button>
           </div>
         </DialogContent>

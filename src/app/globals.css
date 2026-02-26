@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Map Tailwind's `dark:` variant to the `.dark` class on <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -12,8 +15,9 @@
   --color-primary: hsl(var(--primary));
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+/* Override CSS variables when `.dark` is active */
+:root {
+  @variant dark {
     --background: #0a0a0a;
     --foreground: #ededed;
   }

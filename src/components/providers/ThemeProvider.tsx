@@ -2,19 +2,21 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { translations, Language } from "@/lib/translations";
 
 type Theme = "light" | "dark" | "system";
 
 interface ThemeContextType {
     theme: Theme;
     accentColor: string;
-    language: string;
+    language: Language;
     timezone: string;
     setTheme: (theme: Theme) => void;
     setAccentColor: (color: string) => void;
-    setLanguage: (lang: string) => void;
+    setLanguage: (lang: Language) => void;
     setTimezone: (tz: string) => void;
     refreshPreferences: () => Promise<void>;
+    t: (path: string) => string;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -32,7 +34,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const { data: session } = useSession();
     const [theme, setThemeState] = useState<Theme>("light");
     const [accentColor, setAccentColorState] = useState("blue");
-    const [language, setLanguageState] = useState("th");
+    const [language, setLanguageState] = useState<Language>("th");
     const [timezone, setTimezoneState] = useState("Asia/Bangkok");
 
     const applyTheme = useCallback((t: Theme) => {
@@ -59,7 +61,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
             const d = await res.json();
             if (d.theme) setThemeState(d.theme);
             if (d.accentColor) setAccentColorState(d.accentColor);
-            if (d.language) setLanguageState(d.language);
+            if (d.language) setLanguageState(d.language as Language);
             if (d.timezone) setTimezoneState(d.timezone);
         } catch (e) {
             console.error("Failed to load preferences", e);
@@ -86,8 +88,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     const setTheme = (t: Theme) => setThemeState(t);
     const setAccentColor = (c: string) => setAccentColorState(c);
-    const setLanguage = (l: string) => setLanguageState(l);
+    const setLanguage = (l: Language) => setLanguageState(l);
     const setTimezone = (tz: string) => setTimezoneState(tz);
+
+    const t = useCallback((path: string): string => {
+        const keys = path.split(".");
+        let current: any = translations[language];
+        for (const key of keys) {
+            if (current && current[key]) {
+                current = current[key];
+            } else {
+                return path;
+            }
+        }
+        return typeof current === "string" ? current : path;
+    }, [language]);
 
     return (
         <ThemeContext.Provider
@@ -101,6 +116,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
                 setLanguage,
                 setTimezone,
                 refreshPreferences,
+                t,
             }}
         >
             {children}

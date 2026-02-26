@@ -10,8 +10,9 @@ import {
   FileSpreadsheet, ChevronLeft, ChevronRight, Filter, Calendar, Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
-import { th } from "date-fns/locale";
+import { th, enUS } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/components/providers/ThemeProvider";
 
 interface ExportLog {
   id: string;
@@ -44,6 +45,9 @@ export default function ExportLogsPage() {
   const [filterType, setFilterType]     = useState<"all" | "manual" | "auto">("all");
   const [filterStatus, setFilterStatus] = useState<"all" | "success" | "error">("all");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const { language } = useTheme();
+  const isThai = language === "th";
+  const locale = isThai ? th : enUS;
 
   // Debounce search
   useEffect(() => {
@@ -94,21 +98,45 @@ export default function ExportLogsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">ประวัติการส่งออก</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">บันทึกการส่งออกข้อมูลทั้งหมด</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {isThai ? "ประวัติการส่งออก" : "Export history"}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+            {isThai ? "บันทึกการส่งออกข้อมูลทั้งหมด" : "Log of all export runs."}
+          </p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchLogs} className="gap-2">
-          <RefreshCw className="w-3.5 h-3.5"/> รีเฟรช
+          <RefreshCw className="w-3.5 h-3.5" /> {isThai ? "รีเฟรช" : "Refresh"}
         </Button>
       </div>
 
       {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "ทั้งหมด", value: totals.total, icon: FileSpreadsheet, color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20" },
-          { label: "สำเร็จ", value: totals.success, icon: CheckCircle2, color: "text-green-600 bg-green-50 dark:bg-green-900/20" },
-          { label: "ล้มเหลว", value: totals.error, icon: XCircle, color: "text-red-600 bg-red-50 dark:bg-red-900/20" },
-          { label: "แถวทั้งหมด", value: totals.rows.toLocaleString(), icon: RefreshCw, color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20" },
+          {
+            label: isThai ? "ทั้งหมด" : "Total runs",
+            value: totals.total,
+            icon: FileSpreadsheet,
+            color: "text-blue-600 bg-blue-50 dark:bg-blue-900/20",
+          },
+          {
+            label: isThai ? "สำเร็จ" : "Succeeded",
+            value: totals.success,
+            icon: CheckCircle2,
+            color: "text-green-600 bg-green-50 dark:bg-green-900/20",
+          },
+          {
+            label: isThai ? "ล้มเหลว" : "Failed",
+            value: totals.error,
+            icon: XCircle,
+            color: "text-red-600 bg-red-50 dark:bg-red-900/20",
+          },
+          {
+            label: isThai ? "แถวทั้งหมด" : "Total rows",
+            value: totals.rows.toLocaleString(),
+            icon: RefreshCw,
+            color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20",
+          },
         ].map((s) => (
           <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center gap-3">
@@ -130,7 +158,14 @@ export default function ExportLogsPage() {
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
-              <Input placeholder="ค้นหาชื่อการตั้งค่า..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)}/>
+                <Input
+                  placeholder={
+                    isThai ? "ค้นหาชื่อการตั้งค่า..." : "Search by configuration name..."
+                  }
+                  className="pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
             </div>
             <div className="flex gap-2">
               <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-xs">
@@ -139,7 +174,11 @@ export default function ExportLogsPage() {
                     className={cn("px-3 py-1.5 font-medium transition-colors",
                       filterType === t ? "bg-blue-600 text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
                     )}>
-                    {t === "all" ? "ทั้งหมด" : t === "manual" ? "แมนวล" : "อัตโนมัติ"}
+                      {t === "all"
+                        ? isThai ? "ทั้งหมด" : "All"
+                        : t === "manual"
+                          ? isThai ? "แมนวล" : "Manual"
+                          : isThai ? "อัตโนมัติ" : "Automatic"}
                   </button>
                 ))}
               </div>
@@ -149,7 +188,11 @@ export default function ExportLogsPage() {
                     className={cn("px-3 py-1.5 font-medium transition-colors",
                       filterStatus === s ? "bg-blue-600 text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
                     )}>
-                    {s === "all" ? "ทั้งหมด" : s === "success" ? "สำเร็จ" : "ล้มเหลว"}
+                    {s === "all"
+                      ? isThai ? "ทั้งหมด" : "All"
+                      : s === "success"
+                        ? isThai ? "สำเร็จ" : "Succeeded"
+                        : isThai ? "ล้มเหลว" : "Failed"}
                   </button>
                 ))}
               </div>
@@ -162,7 +205,10 @@ export default function ExportLogsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                  {["วันเวลา", "ประเภท", "ชื่อการตั้งค่า / ชีต", "บัญชีโฆษณา", "แถว", "วันที่ข้อมูล", "สถานะ"].map((h) => (
+                  {(isThai
+                    ? ["วันเวลา", "ประเภท", "ชื่อการตั้งค่า / ชีต", "บัญชีโฆษณา", "แถว", "วันที่ข้อมูล", "สถานะ"]
+                    : ["Date / time", "Type", "Config / Sheet", "Ad accounts", "Rows", "Data date", "Status"]
+                  ).map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -178,7 +224,15 @@ export default function ExportLogsPage() {
                   <tr>
                     <td colSpan={7} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
                       <Filter className="w-8 h-8 mx-auto mb-2 opacity-40"/>
-                      <p>{search || filterType !== "all" || filterStatus !== "all" ? "ไม่พบข้อมูลที่ค้นหา" : "ยังไม่มีประวัติการส่งออก"}</p>
+                      <p>
+                        {search || filterType !== "all" || filterStatus !== "all"
+                          ? isThai
+                            ? "ไม่พบข้อมูลที่ค้นหา"
+                            : "No results match your filters"
+                          : isThai
+                            ? "ยังไม่มีประวัติการส่งออก"
+                            : "No export history yet"}
+                      </p>
                     </td>
                   </tr>
                 ) : (
@@ -189,7 +243,7 @@ export default function ExportLogsPage() {
                           <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0"/>
                           <div>
                             <p className="text-xs font-medium text-gray-900 dark:text-gray-100">
-                              {format(new Date(log.createdAt), "d MMM yyyy", { locale: th })}
+                              {format(new Date(log.createdAt), "d MMM yyyy", { locale })}
                             </p>
                             <p className="text-xs text-gray-400">{format(new Date(log.createdAt), "HH:mm")}</p>
                           </div>
@@ -197,7 +251,9 @@ export default function ExportLogsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <Badge variant={log.exportType === "auto" ? "default" : "secondary"} className="text-xs">
-                          {log.exportType === "auto" ? "อัตโนมัติ" : "แมนวล"}
+                          {log.exportType === "auto"
+                            ? isThai ? "อัตโนมัติ" : "Automatic"
+                            : isThai ? "แมนวล" : "Manual"}
                         </Badge>
                       </td>
                       <td className="px-4 py-3">
@@ -216,18 +272,20 @@ export default function ExportLogsPage() {
                         {log.dataDate ? (
                           <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400">
                             <Calendar className="w-3 h-3"/>
-                            {format(new Date(log.dataDate), "d MMM yyyy", { locale: th })}
+                            {format(new Date(log.dataDate), "d MMM yyyy", { locale })}
                           </div>
                         ) : "—"}
                       </td>
                       <td className="px-4 py-3">
                         {log.status === "success" ? (
                           <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-xs font-medium">
-                            <CheckCircle2 className="w-3 h-3"/> สำเร็จ
+                            <CheckCircle2 className="w-3 h-3" />
+                            {isThai ? "สำเร็จ" : "Succeeded"}
                           </div>
                         ) : (
                           <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-xs font-medium" title={log.error ?? ""}>
-                            <XCircle className="w-3 h-3"/> ล้มเหลว
+                            <XCircle className="w-3 h-3" />
+                            {isThai ? "ล้มเหลว" : "Failed"}
                           </div>
                         )}
                       </td>
@@ -242,7 +300,11 @@ export default function ExportLogsPage() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                แสดง {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, data?.total ?? 0)} จาก {data?.total ?? 0} รายการ
+                {isThai ? "แสดง" : "Showing"}{" "}
+                {((page - 1) * PAGE_SIZE) + 1}–
+                {Math.min(page * PAGE_SIZE, data?.total ?? 0)}{" "}
+                {isThai ? "จาก" : "of"} {data?.total ?? 0}{" "}
+                {isThai ? "รายการ" : "entries"}
               </p>
               <div className="flex items-center gap-1">
                 <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="h-7 w-7 p-0">

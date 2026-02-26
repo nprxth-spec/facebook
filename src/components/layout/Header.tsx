@@ -15,10 +15,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useTheme } from "@/components/providers/ThemeProvider";
 
 export default function Header() {
   const { data: session } = useSession();
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const { language } = useTheme();
+  const isThai = language === "th";
 
   const initials = session?.user?.name
     ? session.user.name
@@ -64,13 +67,13 @@ export default function Header() {
           <DropdownMenuItem asChild>
             <Link href="/settings" className="cursor-pointer">
               <User className="mr-2 h-4 w-4" />
-              บัญชีของฉัน
+              {isThai ? "บัญชีของฉัน" : "My account"}
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link href="/settings" className="cursor-pointer">
               <Settings className="mr-2 h-4 w-4" />
-              ตั้งค่า
+              {isThai ? "ตั้งค่า" : "Settings"}
             </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
@@ -79,7 +82,7 @@ export default function Header() {
             className="text-red-600 dark:text-red-400 cursor-pointer focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-900/20"
           >
             <LogOut className="mr-2 h-4 w-4" />
-            ออกจากระบบ
+            {isThai ? "ออกจากระบบ" : "Sign out"}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -91,9 +94,13 @@ export default function Header() {
               <LogOut className="w-5 h-5 text-red-600" />
             </div>
             <div className="flex-1 pt-0.5">
-              <DialogTitle className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1 text-left">ออกจากระบบ?</DialogTitle>
+              <DialogTitle className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1 text-left">
+                {isThai ? "ออกจากระบบ?" : "Sign out?"}
+              </DialogTitle>
               <p className="text-sm text-gray-500 dark:text-gray-400 text-left leading-snug">
-                คุณแน่ใจหรือไม่ที่จะออกจากระบบการใช้งานในขณะนี้?
+                {isThai
+                  ? "คุณแน่ใจหรือไม่ที่จะออกจากระบบการใช้งานในขณะนี้?"
+                  : "Are you sure you want to sign out now?"}
               </p>
             </div>
           </div>
@@ -104,7 +111,7 @@ export default function Header() {
               className="px-4 h-9 rounded-lg text-gray-500 font-medium hover:bg-gray-100 dark:hover:bg-gray-800"
               onClick={() => setIsLogoutConfirmOpen(false)}
             >
-              ยกเลิก
+              {isThai ? "ยกเลิก" : "Cancel"}
             </Button>
             <Button
               variant="destructive"
@@ -112,7 +119,7 @@ export default function Header() {
               className="px-4 h-9 rounded-lg bg-red-600 hover:bg-red-700 font-bold"
               onClick={() => signOut({ callbackUrl: "/" })}
             >
-              ตกลง
+              {isThai ? "ตกลง" : "Confirm"}
             </Button>
           </div>
         </DialogContent>
