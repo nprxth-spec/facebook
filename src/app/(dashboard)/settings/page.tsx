@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -101,21 +101,12 @@ export default function SettingsPage() {
   const ACCOUNTS_PER_PAGE = 10;
 
 
-  const initials = session?.user?.name
-    ? session.user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-    : "U";
+  const initials = useMemo(() => {
+    if (!session?.user?.name) return "U";
+    return session.user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  }, [session?.user?.name]);
 
-  // Load preferences
-  useEffect(() => {
-    fetch("/api/user/preferences")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.theme) setTheme(d.theme);
-        if (d.accentColor) setAccent(d.accentColor);
-        if (d.language) setLanguage(d.language);
-        if (d.timezone) setTimezone(d.timezone);
-      });
-  }, []);
+
 
   // ดึงบัญชีโฆษณาจาก Facebook แล้ว sync เข้า ManagerAccount
   const syncManagerAccountsFromFacebook = async () => {
@@ -299,13 +290,37 @@ export default function SettingsPage() {
   };
 
   const toggleAccount = async (acc: ManagerAccount) => {
-    const res = await fetch("/api/manager-accounts", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: acc.id, isActive: !acc.isActive }),
-    });
-    const updated = await res.json();
-    setAccounts((p) => p.map((a) => a.id === acc.id ? updated : a));
+    const originalState = acc.isActive;
+    const newState = !originalState;
+
+    // Optimistic Update
+    setAccounts((p) =>
+      p.map((a) => (a.id === acc.id ? { ...a, isActive: newState } : a))
+    );
+
+    try {
+      const res = await fetch("/api/manager-accounts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: acc.id, isActive: newState }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update account");
+      }
+
+      const updated = await res.json();
+      // Ensure local state is in sync with server response
+      setAccounts((p) =>
+        p.map((a) => (a.id === acc.id ? updated : a))
+      );
+    } catch (error) {
+      // Revert if failed
+      setAccounts((p) =>
+        p.map((a) => (a.id === acc.id ? { ...a, isActive: originalState } : a))
+      );
+      toast.error(isThai ? "บันทึกการตั้งค่าไม่สำเร็จ" : "Failed to toggle account");
+    }
   };
 
   const deleteAccount = async (id: string) => {
@@ -336,14 +351,14 @@ export default function SettingsPage() {
     { id: "preferences", label: isThai ? "การแสดงผล" : "Display", icon: Palette },
   ];
 
-  const filteredAccounts = accounts.filter((acc) => {
-    if (!accountsSearch.trim()) return true;
+  const filteredAccounts = useMemo(() => {
+    if (!accountsSearch.trim()) return accounts;
     const q = accountsSearch.toLowerCase();
-    return (
+    return accounts.filter((acc) =>
       acc.name.toLowerCase().includes(q) ||
       acc.accountId.toLowerCase().includes(q)
     );
-  });
+  }, [accounts, accountsSearch]);
 
   const getAccountStatusLabel = (acc: ManagerAccount) => {
     const code = fbStatuses[acc.accountId] ?? fbStatuses[acc.id];
