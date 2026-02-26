@@ -192,8 +192,8 @@ function MultiSelectDropdown({
             {!selected.length
               ? placeholder
               : selected.length === 1
-              ? options.find((o) => o.id === selected[0])?.name
-              : `${selected.length} บัญชีที่เลือก`}
+                ? options.find((o) => o.id === selected[0])?.name
+                : `${selected.length} บัญชีที่เลือก`}
           </span>
         )}
         <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -888,7 +888,7 @@ export default function ExportPage() {
           sheetTab: cfg.sheetTab,
           columnMapping: cfg.columnMapping.filter((m) => m.fbCol && m.sheetCol),
           writeMode: cfg.writeMode,
-          dataDate: selectedDate.toISOString(),
+          dataDate: format(selectedDate, "yyyy-MM-dd"),
           configId: activeConfigId ?? undefined,
           configName: cfg.name || undefined,
         }),
@@ -1016,8 +1016,7 @@ export default function ExportPage() {
                     {selectedSheet.name}
                   </span>
                   {selectedSheet.modifiedTime &&
-                    ` · ${
-                      isThai ? "แก้ไขล่าสุด" : "Last modified"
+                    ` · ${isThai ? "แก้ไขล่าสุด" : "Last modified"
                     } ${format(new Date(selectedSheet.modifiedTime), "d MMM yyyy", {
                       locale,
                     })}`}
@@ -1479,10 +1478,10 @@ export default function ExportPage() {
                   </select>
                 </div>
               ) : (
-                <div ref={calRef} className="relative inline-block">
+                <div ref={calRef} className="relative w-full">
                   <button
                     onClick={() => setShowCal(!showCal)}
-                    className="flex h-10 items-center gap-2 rounded-lg border border-gray-200 px-4 text-sm text-gray-900 transition-colors hover:border-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                    className="flex h-10 w-full items-center gap-2 rounded-lg border border-gray-200 px-4 text-sm text-gray-900 transition-colors hover:border-primary dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                   >
                     <Calendar className="h-4 w-4 text-gray-500" />
                     {selectedDate
@@ -1715,9 +1714,9 @@ export default function ExportPage() {
                               <div className="flex items-center gap-2">
                                 <Clock className="w-3.5 h-3.5 text-gray-400" />
                                 <div>
-                              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                {format(new Date(log.createdAt), "d MMM yyyy", { locale })}
-                              </p>
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                    {format(new Date(log.createdAt), "d MMM yyyy", { locale })}
+                                  </p>
                                   <p className="text-xs text-gray-400">{format(new Date(log.createdAt), "HH:mm")}</p>
                                 </div>
                               </div>

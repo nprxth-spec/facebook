@@ -180,12 +180,12 @@ function getMetricValue(fbRow: Record<string, unknown>, fbCol: string): number {
 function mapRowToSheetRow(
     fbRow: Record<string, unknown>,
     mapping: ColumnMapping[]
-): { colIndex: number; value: string }[] {
+): ({ colIndex: number; value: string } | null)[] {
     return mapping
         .filter((m) => m.sheetCol)
         .map((m) => {
             if (!m.fbCol || m.fbCol === "__skip__") {
-                return { colIndex: colLetterToIndex(m.sheetCol), value: "" };
+                return null;
             }
 
             const TEXT_FIELDS = new Set(["date", "ad_id", "ad_name", "adset_id", "adset_name", "campaign_id", "campaign_name", "account_id", "account_name"]);
@@ -304,45 +304,98 @@ export async function runExportTask(options: ExportServiceOptions) {
 
         totalRows = filteredFbRows.length;
         const sheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
-        const colIndices = columnMapping.filter((m) => m.sheetCol).map((m) => colLetterToIndex(m.sheetCol));
-        const maxCol = Math.max(...colIndices);
+        // Extract just the columns we actually want to write to
+        const activeMappings = columnMapping.filter(m => m.sheetCol && m.fbCol && m.fbCol !== "__skip__");
+        if (activeMappings.length === 0) {
+            throw new Error("No valid columns to export");
+        }
 
-        const sheetRows: string[][] = filteredFbRows.map((fbRow) => {
-            const mapped = mapRowToSheetRow(fbRow as Record<string, unknown>, columnMapping);
-            const row: string[] = new Array(maxCol + 1).fill("");
-            for (const { colIndex, value } of mapped) {
-                if (colIndex >= 0 && colIndex <= maxCol) row[colIndex] = value;
+        // Group active mappings into contiguous ranges
+        // e.g. if we have columns A, B, D, E, F, it becomes [[A, B], [D, E, F]]
+        const sortedMappings = [...activeMappings].sort((a, b) => colLetterToIndex(a.sheetCol) - colLetterToIndex(b.sheetCol));
+
+        type RangeGroup = { sheetCols: string[], colIndices: number[], fbCols: string[] };
+        const mappingGroups: RangeGroup[] = [];
+
+        for (const m of sortedMappings) {
+            const idx = colLetterToIndex(m.sheetCol);
+            if (mappingGroups.length === 0) {
+                mappingGroups.push({ sheetCols: [m.sheetCol], colIndices: [idx], fbCols: [m.fbCol] });
+            } else {
+                const lastGroup = mappingGroups[mappingGroups.length - 1];
+                const lastIndex = lastGroup.colIndices[lastGroup.colIndices.length - 1];
+                if (idx === lastIndex + 1) {
+                    // Contiguous
+                    lastGroup.sheetCols.push(m.sheetCol);
+                    lastGroup.colIndices.push(idx);
+                    lastGroup.fbCols.push(m.fbCol);
+                } else {
+                    // Gap
+                    mappingGroups.push({ sheetCols: [m.sheetCol], colIndices: [idx], fbCols: [m.fbCol] });
+                }
             }
-            return row;
-        });
+        }
 
-        const endCol = indexToColLetter(maxCol);
-
+        // We will do a batchUpdate. For append mode, we need to know the starting row.
+        let startRow = 2; // For overwrite mode
         if (writeMode === "append") {
             const existing = await sheetsClient.spreadsheets.values.get({
                 spreadsheetId: googleSheetId,
-                range: `'${sheetTab}'!A:${endCol}`,
+                range: `'${sheetTab}'!A:A`, // Just checking column A to find the last row might not be enough if A is skipped, but usually we map A. Let's check a wider range like A:ZZ to be safe, but just getting max rows is fine.
             });
-            const lastRow = existing.data.values?.length ?? 1;
-            const nextRow = lastRow + 1;
-            await sheetsClient.spreadsheets.values.update({
-                spreadsheetId: googleSheetId,
-                range: `'${sheetTab}'!A${nextRow}:${endCol}${nextRow + sheetRows.length - 1}`,
-                valueInputOption: "USER_ENTERED",
-                requestBody: { values: sheetRows },
+            startRow = (existing.data.values?.length ?? 1) + 1;
+        }
+
+        const dataEntries = mappingGroups.map(group => {
+            const startCol = group.sheetCols[0];
+            const endCol = group.sheetCols[group.sheetCols.length - 1];
+
+            // Build the rows array for this specific group
+            const rowsForGroup = filteredFbRows.map(fbRow => {
+                // We use mapRowToSheetRow, but we only need the exact values for this group
+                // mapRowToSheetRow returns null for skipped, but here we only iterate through active ones anyway
+                // So let's build the values directly
+                return group.fbCols.map(fbCol => {
+                    const tempMapping = [{ fbCol, sheetCol: "A" }]; // Dummy sheetCol just to use existing function logic
+                    const mapped = mapRowToSheetRow(fbRow as Record<string, unknown>, tempMapping);
+                    const item = mapped[0];
+                    return item ? item.value : "";
+                });
             });
-        } else {
-            await sheetsClient.spreadsheets.values.clear({
-                spreadsheetId: googleSheetId,
-                range: `'${sheetTab}'!A2:${endCol}`,
+
+            const rangeString = `'${sheetTab}'!${startCol}${startRow}:${endCol}${startRow + rowsForGroup.length - 1}`;
+
+            return {
+                range: rangeString,
+                values: rowsForGroup
+            };
+        });
+
+        if (writeMode === "overwrite") {
+            // Clear existing data first, but ONLY for the columns we are writing to
+            // This preserves formulas in skipped columns
+            // However, clear might be complex with multiple ranges.
+            // Let's clear the specific ranges we are about to write, but from row 2 to bottom
+            const rangesToClear = mappingGroups.map(g => {
+                return `'${sheetTab}'!${g.sheetCols[0]}2:${g.sheetCols[g.sheetCols.length - 1]}`;
             });
-            await sheetsClient.spreadsheets.values.update({
+
+            await sheetsClient.spreadsheets.values.batchClear({
                 spreadsheetId: googleSheetId,
-                range: `'${sheetTab}'!A2:${endCol}${sheetRows.length + 1}`,
-                valueInputOption: "USER_ENTERED",
-                requestBody: { values: sheetRows },
+                requestBody: {
+                    ranges: rangesToClear
+                }
             });
         }
+
+        // Now do the batchUpdate
+        await sheetsClient.spreadsheets.values.batchUpdate({
+            spreadsheetId: googleSheetId,
+            requestBody: {
+                valueInputOption: "USER_ENTERED",
+                data: dataEntries
+            }
+        });
     } catch (err: unknown) {
         logStatus = "error";
         logError = err instanceof Error ? err.message : "Unknown error";
