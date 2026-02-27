@@ -3,6 +3,7 @@ import Google from "next-auth/providers/google";
 import Facebook from "next-auth/providers/facebook";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db";
+import { exchangeFacebookToken } from "@/lib/tokens";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -38,6 +39,52 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   session: {
     strategy: "database",
+  },
+  events: {
+    async linkAccount({ account }) {
+      if (account.provider === "facebook" && account.access_token) {
+        try {
+          const longLived = await exchangeFacebookToken(account.access_token);
+          await prisma.account.update({
+            where: {
+              provider_providerAccountId: {
+                provider: account.provider,
+                providerAccountId: account.providerAccountId,
+              },
+            },
+            data: {
+              access_token: longLived.access_token,
+              expires_at: Math.floor(Date.now() / 1000) + longLived.expires_in,
+            },
+          });
+          console.log("Facebook token exchanged (linkAccount)");
+        } catch (err) {
+          console.error("Facebook token exchange error (linkAccount):", err);
+        }
+      }
+    },
+    async signIn({ account }) {
+      if (account?.provider === "facebook" && account.access_token) {
+        try {
+          const longLived = await exchangeFacebookToken(account.access_token);
+          await prisma.account.update({
+            where: {
+              provider_providerAccountId: {
+                provider: account.provider,
+                providerAccountId: account.providerAccountId,
+              },
+            },
+            data: {
+              access_token: longLived.access_token,
+              expires_at: Math.floor(Date.now() / 1000) + longLived.expires_in,
+            },
+          });
+          console.log("Facebook token exchanged (signIn)");
+        } catch (err) {
+          console.error("Facebook token exchange error (signIn):", err);
+        }
+      }
+    },
   },
   callbacks: {
     async session({ session, user }) {

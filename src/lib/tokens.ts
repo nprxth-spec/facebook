@@ -48,3 +48,33 @@ export async function getFacebookToken(userId: string) {
   const account = await getProviderToken(userId, "facebook");
   return account?.access_token ?? null;
 }
+
+/** แลกเปลี่ยน Short-lived Facebook token เป็น Long-lived token (60 วัน) */
+export async function exchangeFacebookToken(shortToken: string) {
+  const appId = process.env.AUTH_FACEBOOK_ID;
+  const appSecret = process.env.AUTH_FACEBOOK_SECRET;
+
+  if (!appId || !appSecret) {
+    throw new Error("Facebook configuration missing");
+  }
+
+  const res = await fetch(
+    `https://graph.facebook.com/v19.0/oauth/access_token?` +
+    new URLSearchParams({
+      grant_type: "fb_exchange_token",
+      client_id: appId,
+      client_secret: appSecret,
+      fb_exchange_token: shortToken,
+    })
+  );
+
+  const data = await res.json();
+  if (data.error) {
+    throw new Error(data.error.message);
+  }
+
+  return {
+    access_token: data.access_token as string,
+    expires_in: data.expires_in as number, // usually around 5184000 (60 days)
+  };
+}

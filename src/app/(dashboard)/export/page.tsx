@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,9 +12,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Search, ChevronDown, Check, X, Calendar, Save, Play, Plus, Trash2,
-  FileSpreadsheet, Clock, RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, FileClock,
-  XCircle, CheckCircle2, Filter
+  FileSpreadsheet, Clock, RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, FileClock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -374,7 +380,7 @@ function SheetDropdown({
         type="button"
         onClick={() => !loading && setOpen((o) => !o)}
         className={cn(
-          "flex h-10 w-full items-center justify-between rounded-lg border bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary",
+          "flex h-10 w-full items-center justify-between rounded-lg border bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer",
           error && "border-red-400"
         )}
       >
@@ -441,7 +447,7 @@ function SheetDropdown({
                     setOpen(false);
                   }}
                   className={cn(
-                    "flex w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 items-start gap-3",
+                    "flex w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 items-start gap-3 cursor-pointer",
                     s.id === value && "bg-primary/10 text-primary dark:bg-primary/40"
                   )}
                 >
@@ -505,7 +511,7 @@ function TabDropdown({
         disabled={disabled || loading || !tabs.length}
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "flex h-10 w-full items-center justify-between rounded-lg border bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60",
+          "flex h-10 w-full items-center justify-between rounded-lg border bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer",
         )}
       >
         {loading ? (
@@ -540,7 +546,7 @@ function TabDropdown({
                   setOpen(false);
                 }}
                 className={cn(
-                  "flex w-full items-center px-3 py-1.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700",
+                  "flex w-full items-center px-3 py-1.5 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer",
                   t.title === value &&
                   "bg-primary/10 text-primary dark:bg-primary/40 dark:text-blue-100"
                 )}
@@ -646,73 +652,6 @@ export default function ExportPage() {
   const [cfg, setCfg] = useState<ExportConfig>({ ...DEFAULT_CONFIG });
   const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
 
-  // --- Logs Modal State ---
-  const [isLogsOpen, setIsLogsOpen] = useState(false);
-  const [logsData, setLogsData] = useState<LogsResponse | null>(null);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [logsPage, setLogsPage] = useState(1);
-  const [logsSearch, setLogsSearch] = useState("");
-  const [logsFilterType, setLogsFilterType] = useState<"all" | "manual" | "auto">("all");
-  const [logsFilterStatus, setLogsFilterStatus] = useState<"all" | "success" | "error">("all");
-  const [debouncedLogsSearch, setDebouncedLogsSearch] = useState("");
-
-  // Summary stats for logs
-  const [logTotals, setLogTotals] = useState({ total: 0, success: 0, error: 0, rows: 0 });
-
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedLogsSearch(logsSearch), 400);
-    return () => clearTimeout(t);
-  }, [logsSearch]);
-
-  useEffect(() => {
-    setLogsPage(1);
-  }, [debouncedLogsSearch, logsFilterType, logsFilterStatus]);
-
-  const fetchLogs = useCallback(async () => {
-    setLogsLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page: String(logsPage),
-        limit: "15",
-        ...(debouncedLogsSearch && { search: debouncedLogsSearch }),
-        ...(logsFilterType !== "all" && { exportType: logsFilterType }),
-        ...(logsFilterStatus !== "all" && { status: logsFilterStatus }),
-      });
-      const res = await fetch(`/api/export-logs?${params}`);
-      const json = await res.json();
-      setLogsData(json);
-    } catch (e) {
-      console.error("Failed to fetch logs", e);
-    } finally {
-      setLogsLoading(false);
-    }
-  }, [logsPage, debouncedLogsSearch, logsFilterType, logsFilterStatus]);
-
-  useEffect(() => {
-    if (isLogsOpen) fetchLogs();
-  }, [isLogsOpen, fetchLogs]);
-
-  const fetchLogTotals = useCallback(() => {
-    fetch("/api/export-logs?page=1&limit=1000")
-      .then((r) => r.json())
-      .then((d: LogsResponse) => {
-        setLogTotals({
-          total: d.total,
-          success: d.logs.filter((l) => l.status === "success").length,
-          error: d.logs.filter((l) => l.status === "error").length,
-          rows: d.logs.reduce((sum, l) => sum + l.rowCount, 0),
-        });
-      })
-      .catch(e => console.error("Failed to fetch log totals", e));
-  }, []);
-
-  useEffect(() => {
-    fetchLogTotals();
-  }, [fetchLogTotals]);
-
-  const logsTotalPages = logsData ? Math.ceil(logsData.total / 15) : 0;
-
   // --- Delete Confirmation State ---
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [configToDelete, setConfigToDelete] = useState<{ id: string, name: string } | null>(null);
@@ -811,11 +750,13 @@ export default function ExportPage() {
     }
     const sheetName = sheets.find((s) => s.id === cfg.googleSheetId)?.name ?? "";
 
-    // หากเป็นแมนนวล ให้ล้างค่า schedule ออกเพื่อให้ระบบรู้ว่าเป็นประเภทแมนนวลถาวร
+    // Strictly separate Manual and Automatic modes
     const finalCfg = {
       ...cfg,
       googleSheetName: sheetName,
-      autoSchedule: cfg.isAuto ? cfg.autoSchedule : ""
+      // If NOT isAuto, then it's a permanent Manual config: clear schedule and auto flag
+      autoSchedule: cfg.isAuto ? cfg.autoSchedule : "",
+      isAuto: cfg.isAuto ? cfg.isAuto : false
     };
 
     if (activeConfigId) {
@@ -1103,13 +1044,13 @@ export default function ExportPage() {
               <CardTitle className="text-base">
                 {t("export.savedConfigs")}
               </CardTitle>
-              <button
-                onClick={() => setIsLogsOpen(true)}
+              <Link
+                href="/export/logs"
                 className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors group"
                 title={t("export.viewExportHistory")}
               >
                 <FileClock className="w-5 h-5 text-gray-400 group-hover:text-primary" />
-              </button>
+              </Link>
             </CardHeader>
             <CardContent className="space-y-5">
 
@@ -1140,13 +1081,12 @@ export default function ExportPage() {
                               </span>
                             )}
                           </div>
-
                           <div className="flex flex-col gap-0.5 mt-1">
                             <p className="text-[10px] text-gray-500 truncate leading-normal">
                               {c.adAccountIds?.length ?? 0}{" "}
                               {t("export.accountsCount")} · {c.googleSheetName || "—"}
                             </p>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 scroll-mt-2 mt-1">
                               <span className={cn("text-[9px] font-semibold uppercase tracking-wider px-1 rounded-sm",
                                 c.autoSchedule ? "bg-primary/20 text-primary dark:bg-primary/40 dark:text-primary" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
                               )}>
@@ -1536,234 +1476,7 @@ export default function ExportPage() {
           </Card>
 
 
-          <Dialog open={isLogsOpen} onOpenChange={setIsLogsOpen}>
-            <DialogContent className="max-w-6xl h-[90vh] flex flex-col p-0 overflow-hidden">
-              <DialogHeader className="px-6 py-4 border-b shrink-0">
-                <div className="flex items-center justify-between">
-                  <DialogTitle className="text-xl font-bold">
-                    {t("export.historyLogs")}
-                  </DialogTitle>
-                  <Button variant="outline" size="sm" onClick={fetchLogs} className="gap-2 h-8 mr-6">
-                    <RefreshCw className={cn("w-3.5 h-3.5", logsLoading && "animate-spin")} />{" "}
-                    {t("export.refresh")}
-                  </Button>
-                </div>
-              </DialogHeader>
 
-              <div className="flex-1 flex flex-col min-h-0 bg-gray-50/50 dark:bg-gray-900/50">
-                {/* Stats Summary */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 shrink-0">
-                  {[
-                    {
-                      label: t("common.all") || (isThai ? "ทั้งหมด" : "TOTAL"),
-                      value: logTotals.total,
-                      icon: FileSpreadsheet,
-                      color: "text-primary bg-primary/10 dark:bg-primary/20",
-                    },
-                    {
-                      label: t("export.historySuccess") || (isThai ? "สำเร็จ" : "SUCCESS"),
-                      value: logTotals.success,
-                      icon: CheckCircle2,
-                      color: "text-green-600 bg-green-50 dark:bg-green-900/20",
-                    },
-                    {
-                      label: t("export.historyError") || (isThai ? "ล้มเหลว" : "FAILED"),
-                      value: logTotals.error,
-                      icon: XCircle,
-                      color: "text-red-600 bg-red-50 dark:bg-red-900/20",
-                    },
-                    {
-                      label: t("export.historyRows") || (isThai ? "แถวทั้งหมด" : "ROWS"),
-                      value: logTotals.rows.toLocaleString(),
-                      icon: RefreshCw,
-                      color: "text-purple-600 bg-purple-50 dark:bg-purple-900/20",
-                    },
-                  ].map((s) => (
-                    <div key={s.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${s.color}`}>
-                          <s.icon className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-tight">{s.value}</p>
-                          <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase tracking-wider">{s.label}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Filters */}
-                <div className="px-4 pb-3 flex flex-col sm:flex-row gap-3 shrink-0">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <Input
-                      placeholder={
-                        t("export.exportLogsConfigSearch")
-                      }
-                      className="pl-9 h-9 text-sm"
-                      value={logsSearch}
-                      onChange={(e) => setLogsSearch(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-[11px] bg-white dark:bg-gray-800">
-                      {(["all", "manual", "auto"] as const).map((typ) => (
-                        <button key={typ} onClick={() => setLogsFilterType(typ)}
-                          className={cn("px-3 py-1.5 font-medium transition-colors border-r last:border-r-0 dark:border-gray-700",
-                            logsFilterType === typ ? "bg-primary text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
-                          )}>
-                          {typ === "all"
-                            ? t("common.all") || (isThai ? "ทั้งหมด" : "All")
-                            : typ === "manual"
-                              ? t("export.manualExport")
-                              : t("export.automaticExport")}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden text-[11px] bg-white dark:bg-gray-800">
-                      {(["all", "success", "error"] as const).map((st) => (
-                        <button key={st} onClick={() => setLogsFilterStatus(st)}
-                          className={cn("px-3 py-1.5 font-medium transition-colors border-r last:border-r-0 dark:border-gray-700",
-                            logsFilterStatus === st ? "bg-primary text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
-                          )}>
-                          {st === "all"
-                            ? t("common.all") || (isThai ? "ทั้งหมด" : "All")
-                            : st === "success"
-                              ? t("export.historySuccess") || (isThai ? "สำเร็จ" : "Succeeded")
-                              : t("export.historyError") || (isThai ? "ล้มเหลว" : "Failed")}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Table Area */}
-                <div className="flex-1 overflow-auto bg-white dark:bg-gray-950 border-t dark:border-gray-800">
-                  <table className="w-full text-sm border-collapse">
-                    <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-900 shadow-sm">
-                      <tr className="border-b border-gray-200 dark:border-gray-800">
-                        {(isThai
-                          ? ["วันเวลา", "ประเภท", "ชื่อการตั้งค่า / ชีต", "บัญชี", "แถว", "วันที่ข้อมูล", "สถานะ"]
-                          : ["DATE / TIME", "TYPE", "CONFIG / SHEET", "ACCOUNTS", "ROWS", "DATA DATE", "STATUS"]
-                        ).map((h) => (
-                          <th
-                            key={h}
-                            className="text-left px-4 py-2.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap"
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                      {logsLoading ? (
-                        <tr>
-                          <td colSpan={7} className="px-4 py-20 text-center">
-                            <Loader2 className="w-6 h-6 text-gray-400 animate-spin mx-auto" />
-                          </td>
-                        </tr>
-                      ) : !logsData?.logs?.length ? (
-                        <tr>
-                          <td
-                            colSpan={7}
-                            className="px-4 py-20 text-center text-gray-500 dark:text-gray-400"
-                          >
-                            <Filter className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                            <p className="text-sm">
-                              {isThai ? "ไม่พบประวัติการส่งออก" : "No export history yet"}
-                            </p>
-                          </td>
-                        </tr>
-                      ) : (
-                        logsData.logs.map((log) => (
-                          <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors">
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-3.5 h-3.5 text-gray-400" />
-                                <div>
-                                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                    {format(new Date(log.createdAt), "d MMM yyyy", { locale })}
-                                  </p>
-                                  <p className="text-xs text-gray-400">{format(new Date(log.createdAt), "HH:mm")}</p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">
-                              <Badge
-                                variant={log.exportType === "auto" ? "default" : "secondary"}
-                                className="text-[10px] h-5 px-1.5 uppercase font-bold tracking-tighter"
-                              >
-                                {log.exportType === "auto"
-                                  ? isThai ? "AUTO" : "AUTO"
-                                  : isThai ? "MANUAL" : "MANUAL"}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-3">
-                              <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate max-w-[180px]">{log.configName ?? "—"}</p>
-                              <p className="text-xs text-gray-400 truncate max-w-[180px]">{log.sheetFileName ?? "—"} · {log.sheetTabName ?? "—"}</p>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="text-xs font-medium">{log.adAccountCount}</span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className={cn("text-sm font-bold", !log.rowCount ? "text-gray-400" : "text-blue-600 dark:text-blue-400")}>
-                                {log.rowCount.toLocaleString()}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              {log.dataDate ? (
-                                <div className="flex items-center gap-1 text-xs font-medium text-gray-500">
-                                  <Calendar className="w-3.5 h-3.5" />
-                                  {format(new Date(log.dataDate), "d MMM yyyy", { locale })}
-                                </div>
-                              ) : (
-                                "—"
-                              )}
-                            </td>
-                            <td className="px-4 py-3">
-                              {log.status === "success" ? (
-                                <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />{" "}
-                                  {isThai ? "SUCCESS" : "SUCCESS"}
-                                </div>
-                              ) : (
-                                <div
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                                  title={log.error ?? ""}
-                                >
-                                  <XCircle className="w-3.5 h-3.5" /> {isThai ? "ERROR" : "ERROR"}
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination */}
-                {logsTotalPages > 1 && (
-                  <div className="px-6 py-3 border-t bg-gray-50 dark:bg-gray-900 flex items-center justify-between shrink-0">
-                    <p className="text-xs text-gray-500">
-                      {t("export.exportLogsPage")} {logsPage} {t("export.exportLogsOf")}{" "}
-                      {logsTotalPages} ({logsData?.total}{" "}
-                      {t("export.exportLogsEntries")})
-                    </p>
-                    <div className="flex items-center gap-1">
-                      <Button variant="outline" size="sm" onClick={() => setLogsPage(p => Math.max(1, p - 1))} disabled={logsPage === 1} className="h-8 w-8 p-0">
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => setLogsPage(p => Math.min(logsTotalPages, p + 1))} disabled={logsPage === logsTotalPages} className="h-8 w-8 p-0">
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
@@ -1805,6 +1518,6 @@ export default function ExportPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   );
 }
