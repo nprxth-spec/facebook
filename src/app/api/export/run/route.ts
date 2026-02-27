@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { getFacebookToken, getGoogleClient } from "@/lib/tokens";
 import { NextResponse } from "next/server";
 import { runExportTask } from "@/lib/export-service";
+import { prisma } from "@/lib/db";
 
 interface ColumnMapping {
   fbCol: string;
@@ -40,6 +41,11 @@ export async function POST(req: Request) {
   const oauth2Client = await getGoogleClient(session.user.id);
   if (!oauth2Client) return NextResponse.json({ error: "Google not connected" }, { status: 400 });
 
+  const userPrefs = await prisma.userPreferences.findUnique({
+    where: { userId: session.user.id }
+  });
+  const timezone = userPrefs?.timezone || "Asia/Bangkok";
+
   try {
     const result = await runExportTask({
       userId: session.user.id,
@@ -53,7 +59,8 @@ export async function POST(req: Request) {
       dataDate,
       configId,
       configName,
-      exportType: "manual"
+      exportType: "manual",
+      timezone
     });
 
     return NextResponse.json(result);

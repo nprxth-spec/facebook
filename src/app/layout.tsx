@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import { SessionProvider } from "next-auth/react";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 
@@ -21,11 +22,22 @@ export default async function RootLayout({
 }) {
   const session = await auth();
 
+  let initialLanguage = "th";
+  if (session?.user?.id) {
+    const prefs = await prisma.userPreferences.findUnique({
+      where: { userId: session.user.id },
+      select: { language: true },
+    });
+    if (prefs?.language) {
+      initialLanguage = prefs.language;
+    }
+  }
+
   return (
-    <html lang="th" suppressHydrationWarning>
+    <html lang={initialLanguage} suppressHydrationWarning>
       <body className={inter.className}>
         <SessionProvider session={session}>
-          <ThemeProvider>
+          <ThemeProvider initialLanguage={initialLanguage as any}>
             {children}
             <Toaster richColors position="top-right" />
           </ThemeProvider>

@@ -29,7 +29,7 @@ export default function LoginPage() {
   const { language } = useTheme();
   const isThai = language === "th";
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-[#f4f5ff] via-[#f8f9ff] to-[#fef9ff] dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center px-4 py-4">
+    <div className="relative min-h-screen bg-background dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 flex items-center justify-center px-4 py-4">
       {/* Top brand logo (aligned with landing navbar) */}
       <header className="absolute top-4 left-0 w-full">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -47,65 +47,65 @@ export default function LoginPage() {
       {/* Center card */}
       <div className="w-full max-w-sm">
         <div className="relative mx-auto rounded-3xl bg-white/95 dark:bg-slate-900 shadow-[0_18px_60px_rgba(15,23,42,0.16)] border border-slate-100/90 dark:border-slate-800 px-7 py-8">
-            {/* Heading */}
-            <div className="text-center mb-5">
-              <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-                {isThai ? "ยินดีต้อนรับสู่ AdSync" : "Welcome to AdSync"}
-              </h1>
-              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                {isThai
-                  ? "ปลดล็อกทุกฟีเจอร์ด้วยการเข้าสู่ระบบ"
-                  : "Unlock all features by logging in"}
-              </p>
+          {/* Heading */}
+          <div className="text-center mb-5">
+            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+              {isThai ? "ยินดีต้อนรับสู่ AdSync" : "Welcome to AdSync"}
+            </h1>
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+              {isThai
+                ? "ปลดล็อกทุกฟีเจอร์ด้วยการเข้าสู่ระบบ"
+                : "Unlock all features by logging in"}
+            </p>
+          </div>
+
+          {/* Login buttons */}
+          <div className="flex flex-col items-center gap-3">
+            <Button
+              onClick={() => signIn("google", { callbackUrl: "/connect" })}
+              variant="outline"
+              size="lg"
+              className="w-full max-w-[300px] h-10 justify-center gap-1.5 rounded-xl border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-[13px] px-3"
+            >
+              <GoogleIcon />
+              {isThai ? "เข้าสู่ระบบด้วย Google" : "Continue with Google"}
+            </Button>
+
+            <Button
+              onClick={() => signIn("facebook", { callbackUrl: "/connect" })}
+              size="lg"
+              className="w-full max-w-[300px] h-10 justify-center gap-1.5 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white text-[13px] px-3"
+            >
+              <FacebookIcon />
+              {isThai ? "เข้าสู่ระบบด้วย Facebook" : "Continue with Facebook"}
+            </Button>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 py-1">
+              <span className="h-px flex-1 bg-slate-200" />
+              <span className="text-[11px] text-slate-400 uppercase tracking-[0.18em]">
+                {isThai ? "หรือ" : "or"}
+              </span>
+              <span className="h-px flex-1 bg-slate-200" />
             </div>
 
-            {/* Login buttons */}
-            <div className="flex flex-col items-center gap-3">
-              <Button
-                onClick={() => signIn("google", { callbackUrl: "/connect" })}
-                variant="outline"
-                size="lg"
-                className="w-full max-w-[300px] h-10 justify-center gap-1.5 rounded-xl border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-[13px] px-3"
-              >
-                <GoogleIcon />
-                {isThai ? "เข้าสู่ระบบด้วย Google" : "Continue with Google"}
-              </Button>
+            {/* Email button (placeholder / normal button) */}
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="w-full max-w-[300px] h-10 justify-center gap-1.5 rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-[13px] px-3"
+            >
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-[11px]">
+                @
+              </span>
+              {isThai ? "เข้าสู่ระบบด้วยอีเมล" : "Continue with Email"}
+            </Button>
+          </div>
 
-              <Button
-                onClick={() => signIn("facebook", { callbackUrl: "/connect" })}
-                size="lg"
-                className="w-full max-w-[300px] h-10 justify-center gap-1.5 rounded-xl bg-[#1877F2] hover:bg-[#166fe5] text-white text-[13px] px-3"
-              >
-                <FacebookIcon />
-                {isThai ? "เข้าสู่ระบบด้วย Facebook" : "Continue with Facebook"}
-              </Button>
-
-              {/* Divider */}
-              <div className="flex items-center gap-3 py-1">
-                <span className="h-px flex-1 bg-slate-200" />
-                <span className="text-[11px] text-slate-400 uppercase tracking-[0.18em]">
-                  {isThai ? "หรือ" : "or"}
-                </span>
-                <span className="h-px flex-1 bg-slate-200" />
-              </div>
-
-              {/* Email button (placeholder / normal button) */}
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="w-full max-w-[300px] h-10 justify-center gap-1.5 rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-[13px] px-3"
-              >
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-[11px]">
-                  @
-                </span>
-                {isThai ? "เข้าสู่ระบบด้วยอีเมล" : "Continue with Email"}
-              </Button>
-            </div>
-
-            {/* Terms */}
-            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 leading-relaxed">
+          {/* Terms */}
+          <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 leading-relaxed">
               {isThai ? (
                 <>
                   การกดปุ่มเข้าสู่ระบบ ถือว่าคุณยอมรับ{" "}
@@ -141,8 +141,8 @@ export default function LoginPage() {
                   </Link>
                 </>
               )}
-              </p>
-            </div>
+            </p>
+          </div>
         </div>
 
         {/* Back link */}

@@ -30,11 +30,17 @@ const ACCENT_COLORS: Record<string, string> = {
     pink: "330.4 81.2% 60.4%",
 };
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
+export function ThemeProvider({
+    children,
+    initialLanguage = "th"
+}: {
+    children: React.ReactNode;
+    initialLanguage?: Language;
+}) {
     const { data: session } = useSession();
     const [theme, setThemeState] = useState<Theme>("light");
     const [accentColor, setAccentColorState] = useState("blue");
-    const [language, setLanguageState] = useState<Language>("th");
+    const [language, setLanguageState] = useState<Language>(initialLanguage);
     const [timezone, setTimezoneState] = useState("Asia/Bangkok");
 
     const applyTheme = useCallback((t: Theme) => {

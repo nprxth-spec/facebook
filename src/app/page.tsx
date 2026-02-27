@@ -103,7 +103,7 @@ export default function LandingPage() {
   }, [status, router]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#f4f5ff] via-[#f8f9ff] to-[#fef9ff] text-slate-900 dark:bg-slate-950 dark:text-slate-50">
+    <div className="min-h-screen bg-background text-slate-900 dark:bg-slate-950 dark:text-slate-50">
       {/* Navbar */}
       <nav className="fixed top-0 w-full z-50 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl shadow-sm dark:bg-slate-950/80 dark:border-white/10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">

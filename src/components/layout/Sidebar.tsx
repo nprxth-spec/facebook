@@ -11,15 +11,8 @@ import {
   ChevronRight,
   Zap,
 } from "lucide-react";
-import React, { useState } from "react";
+import React from "react";
 import { useTheme } from "@/components/providers/ThemeProvider";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 
 const navItems = [
   {
@@ -48,8 +41,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { t } = useTheme();
 
-  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
-
   return (
     <>
       <aside
@@ -75,15 +66,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               </div>
             </Link>
           )}
-          <button
-            onClick={onToggle}
-            className={cn(
-              "p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400 transition-colors",
-              collapsed && "hidden"
-            )}
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
         </div>
 
         {/* Navigation */}
@@ -114,68 +96,22 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </nav>
 
         {/* Bottom Section */}
-        <div className="p-2 border-t border-gray-200 dark:border-gray-700 space-y-1">
+        <div className="p-2 border-t border-gray-200 dark:border-gray-700">
           <button
-            onClick={() => setIsLogoutDialogOpen(true)}
+            onClick={onToggle}
             className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-all duration-200",
-              collapsed && "justify-center"
+              "w-full flex items-center p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400 transition-colors",
+              collapsed ? "justify-center" : "justify-end"
             )}
-            title={collapsed ? t("sidebar.logout") : undefined}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-            {!collapsed && <span>{t("sidebar.logout")}</span>}
+            {collapsed ? (
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><path d="M9 3v18" /><path d="m14 15 3-3-3-3" /></svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><path d="M9 3v18" /><path d="m15 15-3-3 3-3" /></svg>
+            )}
           </button>
-
-          {collapsed && (
-            <button
-              onClick={onToggle}
-              className="w-full flex items-center justify-center p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400 transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          )}
         </div>
       </aside>
-
-      {/* Logout Confirmation Dialog */}
-      <Dialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
-        <DialogContent className="max-w-[400px] p-0 overflow-hidden rounded-lg border-none shadow-2xl">
-          <div className="p-5 flex items-start gap-4">
-            <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="red" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
-            </div>
-            <div className="flex-1 pt-0.5">
-              <DialogTitle className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">
-                {t("sidebar.logoutConfirmTitle")}
-              </DialogTitle>
-              <p className="text-sm text-gray-500 dark:text-gray-400 leading-snug">
-                {t("sidebar.logoutConfirmDesc")}
-              </p>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 p-4 pt-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="px-4 h-9 rounded-lg text-gray-500 font-medium hover:bg-gray-100 dark:hover:bg-gray-800"
-              onClick={() => setIsLogoutDialogOpen(false)}
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              className="px-4 h-9 rounded-lg bg-red-600 hover:bg-red-700 font-bold"
-              onClick={() => {
-                window.location.href = "/api/auth/signout";
-              }}
-            >
-              {t("common.confirm")}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

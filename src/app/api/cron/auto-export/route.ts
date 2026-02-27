@@ -138,7 +138,8 @@ export async function GET(req: Request) {
                     dateRange: config.dateRange || "today",
                     configId: config.id,
                     configName: config.name,
-                    exportType: "auto"
+                    exportType: "auto",
+                    timezone: userTimezone
                 });
 
                 processedFiles++;

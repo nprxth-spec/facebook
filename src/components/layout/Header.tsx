@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Settings, User, ChevronDown, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/providers/ThemeProvider";
@@ -22,8 +22,10 @@ export default function Header() {
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const { language } = useTheme();
   const isThai = language === "th";
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
-  const initials = session?.user?.name
+  const initials = mounted && session?.user?.name
     ? session.user.name
       .split(" ")
       .map((n) => n[0])
@@ -33,10 +35,10 @@ export default function Header() {
     : "U";
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 dark:bg-gray-900 dark:border-gray-700 flex items-center justify-end px-6 gap-4">
+    <header className="h-16 sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 flex items-center justify-end px-6 gap-4">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+          <button suppressHydrationWarning className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
             <Avatar className="w-8 h-8">
               <AvatarImage src={session?.user?.image ?? ""} alt={session?.user?.name ?? "User"} />
               <AvatarFallback className="text-xs">{initials}</AvatarFallback>

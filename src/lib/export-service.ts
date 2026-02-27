@@ -58,6 +58,7 @@ export interface ExportServiceOptions {
     configId?: string;
     configName?: string;
     exportType?: "manual" | "auto";
+    timezone?: string;
 }
 
 function colLetterToIndex(letter: string): number {
@@ -237,40 +238,39 @@ export async function runExportTask(options: ExportServiceOptions) {
     const {
         userId, fbToken, oauth2Client, adAccountIds, googleSheetId,
         sheetTab, columnMapping, writeMode, dataDate, dateRange = "today",
-        configId, configName, exportType = "manual"
+        configId, configName, exportType = "manual", timezone = "Asia/Bangkok"
     } = options;
 
     let since: string;
     let until: string;
     let logDate: Date;
 
-    // Calculate dates based on Bangkok timezone
+    // Calculate dates based on provided timezone
     const now = new Date();
-    const bangkokNowString = now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" });
-    const bangkokNow = new Date(bangkokNowString);
-
-    // For logging, we want the UTC equivalent of the midnight of the target date in BKK
-    // so Prisma DateTimes are consistent. But simple Date object is usually fine for logDate.
+    const targetNowString = now.toLocaleString("en-US", { timeZone: timezone });
+    const targetNow = new Date(targetNowString);
 
     if (exportType === "auto" || !dataDate) {
         if (dateRange === "yesterday") {
-            const yesterday = subDays(bangkokNow, 1);
+            const yesterday = subDays(targetNow, 1);
             since = until = format(yesterday, "yyyy-MM-dd");
             logDate = yesterday;
         } else if (dateRange === "last_7_days") {
-            const sevenDaysAgo = subDays(bangkokNow, 7);
+            const sevenDaysAgo = subDays(targetNow, 7);
             since = format(sevenDaysAgo, "yyyy-MM-dd");
-            until = format(bangkokNow, "yyyy-MM-dd");
-            logDate = bangkokNow;
+            until = format(targetNow, "yyyy-MM-dd");
+            logDate = targetNow;
         } else {
             // default to today
-            since = until = format(bangkokNow, "yyyy-MM-dd");
-            logDate = bangkokNow;
+            since = until = format(targetNow, "yyyy-MM-dd");
+            logDate = targetNow;
         }
     } else {
         const parsedDate = dataDate instanceof Date ? dataDate : new Date(dataDate);
-        since = until = format(parsedDate, "yyyy-MM-dd");
-        logDate = parsedDate;
+        const dateStringInTZ = parsedDate.toLocaleString("en-US", { timeZone: timezone });
+        const dateInTZ = new Date(dateStringInTZ);
+        since = until = format(dateInTZ, "yyyy-MM-dd");
+        logDate = dateInTZ;
     }
 
 

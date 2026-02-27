@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { Language } from "@/lib/translations";
 
@@ -35,7 +37,7 @@ function GoogleIcon({ className }: { className?: string }) {
 
 function FacebookIcon({ className }: { className?: string }) {
   return (
-    <svg className={cn("w-4 h-4", className)} viewBox="0 0 24 24" fill="#1877F2">
+    <svg className={cn("w-4 h-4", className)} viewBox="0 0 24 24" fill="currentColor">
       <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
     </svg>
   );
@@ -50,9 +52,35 @@ const ACCENT_COLORS = [
   { id: "pink", label: "ชมพู", cls: "bg-pink-600" },
 ];
 
-export default function SettingsPage() {
+const getTimezoneLabel = (tz: string) => {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' });
+    const offsetString = formatter.formatToParts(new Date()).find(p => p.type === 'timeZoneName')?.value;
+    if (!offsetString || offsetString === 'GMT') return `${tz.replace(/_/g, ' ')} (UTC)`;
+
+    const offset = offsetString.replace('GMT', ''); // e.g. "+8", "-5", "+05:30"
+    const sign = offset[0]; // "+" or "-"
+    const rest = offset.substring(1);
+    const parts = rest.split(':');
+    let hours = parts[0];
+    if (hours.length === 1) hours = "0" + hours;
+    const minutes = parts.length > 1 ? `:${parts[1]}` : "";
+
+    return `${tz.replace(/_/g, ' ')} (UTC${sign}${hours}${minutes})`;
+  } catch {
+    return tz.replace(/_/g, ' ');
+  }
+};
+
+function SettingsContent() {
   const { data: session } = useSession();
-  const [activeTab, setActiveTab] = useState("account");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const VALID_TABS = ["account", "connections", "manager-accounts", "billing", "preferences", "delete"];
+  const activeTab = VALID_TABS.includes(searchParams.get("tab") ?? "") ? (searchParams.get("tab") as string) : "account";
+  const setActiveTab = useCallback((tab: string) => {
+    router.push(`/settings?tab=${tab}`, { scroll: false });
+  }, [router]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
 
@@ -85,7 +113,23 @@ export default function SettingsPage() {
     setTheme(globalTheme);
     setAccent(globalAccent);
     setLanguage(globalLanguage);
-    setTimezone(globalTimezone);
+
+    // Auto-detect timezone if not set
+    if (!globalTimezone || globalTimezone === "Asia/Bangkok") {
+      try {
+        const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (detected && detected !== globalTimezone) {
+          setTimezone(detected);
+          // We don't auto-save to DB here to avoid unprompted saves, but we set it locally
+        } else {
+          setTimezone(globalTimezone);
+        }
+      } catch {
+        setTimezone(globalTimezone);
+      }
+    } else {
+      setTimezone(globalTimezone);
+    }
   }, [globalTheme, globalAccent, globalLanguage, globalTimezone]);
 
   // Manager accounts
@@ -110,6 +154,28 @@ export default function SettingsPage() {
 
   // ดึงบัญชีโฆษณาจาก Facebook แล้ว sync เข้า ManagerAccount
   const syncManagerAccountsFromFacebook = async () => {
+    // 10-minute rate limit (600,000 ms)
+    const lastSyncStr = localStorage.getItem("lastFbSyncTime");
+    if (lastSyncStr) {
+      const lastSync = parseInt(lastSyncStr, 10);
+      const now = Date.now();
+      const timeElapsed = now - lastSync;
+      const timeRemaining = 600000 - timeElapsed;
+
+      if (timeRemaining > 0) {
+        const minutes = Math.floor(timeRemaining / 60000);
+        const seconds = Math.floor((timeRemaining % 60000) / 1000);
+
+        toast.info(
+          isThai
+            ? `ใช้ข้อมูลล่าสุด (ซิงค์ใหม่ได้อีกครั้งใน ${minutes} นาที ${seconds} วินาที)`
+            : `Cached data used (Can sync again in ${minutes}m ${seconds}s)`
+        );
+        reloadManagerAccounts();
+        return;
+      }
+    }
+
     setSyncingFbAccounts(true);
     try {
       const res = await fetch("/api/facebook/ad-accounts");
@@ -157,6 +223,8 @@ export default function SettingsPage() {
         setAccounts(afterData);
         setAccountsPage(1);
       }
+
+      localStorage.setItem("lastFbSyncTime", Date.now().toString());
       toast.success("ดึงบัญชีจาก Facebook และอัปเดตเรียบร้อย");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "ไม่สามารถดึงบัญชีจาก Facebook ได้");
@@ -245,21 +313,24 @@ export default function SettingsPage() {
     setAccountsPage(1);
   }, [accountsSearch]);
 
-  const savePreferences = async () => {
+  // Use a generic function to save specific setting types while updating local & global state
+  const handlePreferenceChange = async (key: "theme" | "accentColor" | "language" | "timezone", val: string) => {
+    // Optimistic UI updates
+    if (key === "theme") { setTheme(val as any); setGlobalTheme(val as any); }
+    if (key === "accentColor") { setAccent(val); setGlobalAccent(val); }
+    if (key === "language") { setLanguage(val as any); setGlobalLanguage(val as Language); }
+    if (key === "timezone") { setTimezone(val); setGlobalTimezone(val); }
+
     setPrefsSaving(true);
     try {
       await fetch("/api/user/preferences", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ theme, accentColor, language, timezone }),
+        body: JSON.stringify({ theme, accentColor, language, timezone, [key]: val }),
       });
-      setGlobalTheme(theme);
-      setGlobalAccent(accentColor);
-      setGlobalLanguage(language);
-      setGlobalTimezone(timezone);
-      toast.success("บันทึกการตั้งค่าแล้ว");
+      toast.success(isThai ? "บันทึกการตั้งค่าแล้ว" : "Preferences saved");
     } catch {
-      toast.error("เกิดข้อผิดพลาด");
+      toast.error(isThai ? "เกิดข้อผิดพลาด" : "Error saving preferences");
     } finally {
       setPrefsSaving(false);
     }
@@ -399,23 +470,25 @@ export default function SettingsPage() {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar */}
         <div className="lg:w-52 shrink-0">
-          <nav className="space-y-1">
-            {tabs.map((t) => (
-              <button key={t.id} onClick={() => setActiveTab(t.id)}
-                className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
-                  activeTab === t.id ? "bg-primary/10 text-primary dark:bg-primary/30 dark:text-primary" : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+          <Card className="p-1.5 shadow-sm overflow-hidden">
+            <nav className="space-y-1">
+              {tabs.map((t) => (
+                <button key={t.id} onClick={() => setActiveTab(t.id)}
+                  className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left cursor-pointer",
+                    activeTab === t.id ? "bg-primary/10 text-primary dark:bg-primary/30 dark:text-primary" : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                  )}>
+                  <t.icon className="w-4 h-4 shrink-0" />{t.label}
+                </button>
+              ))}
+              <Separator className="my-1 mx-2 bg-gray-100 dark:bg-gray-700" />
+              <button onClick={() => setActiveTab("delete")}
+                className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left cursor-pointer",
+                  activeTab === "delete" ? "bg-primary/5 text-primary dark:bg-primary/20 dark:text-primary" : "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                 )}>
-                <t.icon className="w-4 h-4 shrink-0" />{t.label}
+                <Trash2 className="w-4 h-4 shrink-0" />{isThai ? "ลบบัญชี" : "Delete Account"}
               </button>
-            ))}
-            <Separator className="my-2" />
-            <button onClick={() => setActiveTab("delete")}
-              className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left",
-                activeTab === "delete" ? "bg-primary/5 text-primary dark:bg-primary/20 dark:text-primary" : "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-              )}>
-              <Trash2 className="w-4 h-4 shrink-0" />ลบบัญชี
-            </button>
-          </nav>
+            </nav>
+          </Card>
         </div>
 
         {/* Content */}
@@ -558,25 +631,6 @@ export default function SettingsPage() {
                       : "Select which Facebook ad accounts to use in the system."}
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={syncManagerAccountsFromFacebook}
-                  disabled={syncingFbAccounts}
-                >
-                  {syncingFbAccounts ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      {isThai ? "กำลังดึงจาก Facebook..." : "Syncing from Facebook..."}
-                    </>
-                  ) : (
-                    <>
-                      <FacebookIcon className="w-3.5 h-3.5" />
-                      {isThai ? "ดึงจาก Facebook" : "Sync from Facebook"}
-                    </>
-                  )}
-                </Button>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Toolbar: search + actions */}
@@ -600,11 +654,23 @@ export default function SettingsPage() {
                       {isThai ? "รีเฟรช" : "Refresh"}
                     </Button>
                     <Button
+                      variant="default"
                       size="sm"
-                      className="h-8 px-3 text-xs"
-                      onClick={() => toast.success("บันทึกการตั้งค่าบัญชีแล้ว")}
+                      className="h-8 px-3 text-xs gap-1.5"
+                      onClick={syncManagerAccountsFromFacebook}
+                      disabled={syncingFbAccounts}
                     >
-                      บันทึก
+                      {syncingFbAccounts ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          {isThai ? "กำลังดึง..." : "Syncing..."}
+                        </>
+                      ) : (
+                        <>
+                          <FacebookIcon className="w-3.5 h-3.5" />
+                          {isThai ? "ดึงจาก Facebook" : "Sync from Facebook"}
+                        </>
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -641,7 +707,7 @@ export default function SettingsPage() {
                               {isThai ? "บัญชี" : "Account"}
                             </th>
                             <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                              "Account ID"
+                              {isThai ? "บัญชีโฆษณา" : "Account ID"}
                             </th>
                             <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                               {isThai ? "สถานะ" : "Status"}
@@ -662,22 +728,22 @@ export default function SettingsPage() {
                                 key={acc.id}
                                 className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
                               >
-                                <td className="px-4 py-2">
+                                <td className="px-4 py-1.5">
                                   <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-primary/10 dark:bg-primary/20 rounded-lg flex items-center justify-center">
-                                      <FacebookIcon className="w-4 h-4" />
+                                    <div className="w-7 h-7 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+                                      <FacebookIcon className="w-4 h-4 text-[#1877F2]" />
                                     </div>
                                     <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
                                       {acc.name}
                                     </span>
                                   </div>
                                 </td>
-                                <td className="px-4 py-2">
+                                <td className="px-4 py-1.5">
                                   <span className="text-xs font-mono text-gray-600 dark:text-gray-300">
                                     {acc.accountId}
                                   </span>
                                 </td>
-                                <td className="px-4 py-2 text-center">
+                                <td className="px-4 py-1.5 text-center">
                                   <Badge
                                     variant={getAccountStatusVariant(acc)}
                                     className="text-xs px-3 py-0.5"
@@ -685,7 +751,7 @@ export default function SettingsPage() {
                                     {getAccountStatusLabel(acc)}
                                   </Badge>
                                 </td>
-                                <td className="px-4 py-2 text-center">
+                                <td className="px-4 py-1.5 text-center">
                                   <Switch
                                     className="scale-75"
                                     checked={acc.isActive}
@@ -840,10 +906,7 @@ export default function SettingsPage() {
                         { id: "system", labelTh: "ตามระบบ", labelEn: "System", icon: Monitor },
                       ] as const
                     ).map((t) => (
-                      <button key={t.id} onClick={() => {
-                        setTheme(t.id);
-                        setGlobalTheme(t.id);
-                      }}
+                      <button key={t.id} disabled={prefsSaving} onClick={() => handlePreferenceChange("theme", t.id)}
                         className={cn("flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-colors",
                           theme === t.id ? "border-primary bg-primary/5 dark:bg-primary/20" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
                         )}>
@@ -859,12 +922,9 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-3">
                   <Label>{isThai ? "สีธีมหลัก" : "Accent color"}</Label>
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2 flex-wrap pt-2">
                     {ACCENT_COLORS.map((c) => (
-                      <button key={c.id} onClick={() => {
-                        setAccent(c.id);
-                        setGlobalAccent(c.id);
-                      }} title={c.label}
+                      <button key={c.id} disabled={prefsSaving} onClick={() => handlePreferenceChange("accentColor", c.id)} title={c.label}
                         className={cn("w-8 h-8 rounded-full relative transition-all", c.cls, accentColor === c.id && "ring-2 ring-offset-2 ring-gray-400 dark:ring-gray-500 shadow-lg scale-110")}>
                         {accentColor === c.id && <Check className="w-4 h-4 text-white absolute inset-0 m-auto" />}
                       </button>
@@ -872,35 +932,50 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 flex flex-col justify-end">
                     <Label className="flex items-center gap-1.5">
                       <Globe className="w-3.5 h-3.5" />
                       {isThai ? "ภาษา" : "Language"}
                     </Label>
-                    <select value={language} onChange={(e) => setLanguage(e.target.value as Language)}
-                      className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary">
-                      <option value="th">ภาษาไทย</option>
-                      <option value="en">English</option>
-                    </select>
+                    <Select value={language} disabled={prefsSaving} onValueChange={(val) => handlePreferenceChange("language", val)}>
+                      <SelectTrigger className="w-full bg-white dark:bg-gray-800">
+                        <SelectValue placeholder="Select Language" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" side="bottom" className="max-h-[300px]">
+                        <SelectItem value="th">
+                          <div className="flex items-center gap-2">
+                            <img src="https://flagcdn.com/w20/th.png" srcSet="https://flagcdn.com/w40/th.png 2x" width="20" alt="TH" className="rounded-sm" />
+                            ภาษาไทย
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="en">
+                          <div className="flex items-center gap-2">
+                            <img src="https://flagcdn.com/w20/us.png" srcSet="https://flagcdn.com/w40/us.png 2x" width="20" alt="US" className="rounded-sm" />
+                            English
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 flex flex-col justify-end">
                     <Label className="flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5" />
                       {isThai ? "ไทม์โซน" : "Timezone"}
                     </Label>
-                    <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
-                      className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary">
-                      <option value="Asia/Bangkok">Asia/Bangkok (UTC+7)</option>
-                      <option value="Asia/Singapore">Asia/Singapore (UTC+8)</option>
-                      <option value="UTC">UTC</option>
-                      <option value="America/New_York">America/New_York (UTC-5)</option>
-                    </select>
+                    <Select value={timezone} disabled={prefsSaving} onValueChange={(val) => handlePreferenceChange("timezone", val)}>
+                      <SelectTrigger className="w-full bg-white dark:bg-gray-800">
+                        <SelectValue placeholder="Select Timezone" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" side="bottom" className="max-h-[300px]">
+                        {Intl.supportedValuesOf('timeZone').map(tz => (
+                          <SelectItem key={tz} value={tz}>
+                            {getTimezoneLabel(tz)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                <Button onClick={savePreferences} disabled={prefsSaving} className="gap-2">
-                  {prefsSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {isThai ? "บันทึกการตั้งค่า" : "Save preferences"}
-                </Button>
               </CardContent>
             </Card>
           )}
@@ -995,5 +1070,13 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-400">กำลังโหลด...</div>}>
+      <SettingsContent />
+    </Suspense>
   );
 }
