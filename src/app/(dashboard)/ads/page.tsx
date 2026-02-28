@@ -501,17 +501,8 @@ export default function AdsPage() {
       </div>
 
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">
-            {isThai ? "ตัวกรอง" : "Filters"}
-          </CardTitle>
-          <CardDescription>
-            {isThai
-              ? "ค้นหาตามชื่อ/บัญชีโฆษณา/ID"
-              : "Search by name/account/ID."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
+        {/* ── Filter section ── */}
+        <div className="px-6 pt-4 pb-4 border-b border-gray-100 dark:border-gray-800">
           <div className="flex flex-col gap-2 md:flex-row md:items-end">
             <div className="flex-1 space-y-1">
               <label className="text-xs font-medium text-gray-600 dark:text-gray-300">
@@ -589,22 +580,17 @@ export default function AdsPage() {
               {isThai ? "รีเฟรชข้อมูล" : "Refresh"}
             </button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-base">
-              {isThai ? "ผลลัพธ์โฆษณา" : "Ads results"}
-            </CardTitle>
-            <CardDescription>
-              {isThai
-                ? `จำนวน ${ads.length.toLocaleString()} รายการ`
-                : `${ads.length.toLocaleString()} ads`}
-            </CardDescription>
-          </div>
-        </CardHeader>
+        {/* ── Results section ── */}
+        <div className="px-6 py-3 flex items-center justify-between border-b border-gray-100 dark:border-gray-800">
+          <span className="text-base font-semibold text-gray-900 dark:text-gray-100">
+            {isThai ? "ผลลัพธ์โฆษณา" : "Ads results"}
+          </span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            {isThai ? `${ads.length.toLocaleString()} รายการ` : `${ads.length.toLocaleString()} ads`}
+          </span>
+        </div>
         <CardContent className="p-0">
           {loading ? (
             <div className="flex items-center justify-center py-10">

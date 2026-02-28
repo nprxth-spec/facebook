@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -398,39 +398,31 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
     // Simplified UI rendering block based on reference project port
     return (
         <div className="py-8 px-4 h-full overflow-y-auto">
-            <div className="mb-6 invisible h-0 overflow-hidden">
-                <h1 className="text-2xl font-bold flex items-center gap-2">
-                    <Users className="h-6 w-6 text-indigo-500" />
-                    กลุ่มเป้าหมาย (Custom Audiences)
-                </h1>
-                <p className="text-muted-foreground mt-1">เครื่องมือสร้างและจัดการกลุ่มเป้าหมายล่วงหน้า</p>
-            </div>
-
             <div className="grid gap-6 max-w-3xl mx-auto">
                 <Card className="shadow-sm">
                     <CardHeader>
                         <CardTitle>
-                            {activeTab === "engagement" && "สร้าง Engagement Audience"}
-                            {activeTab === "lookalike" && "สร้าง Lookalike Audience"}
-                            {activeTab === "interest" && "หาไอเดียกลุ่มเป้าหมายด้วย AI"}
+                            {activeTab === "engagement" && (isThai ? "สร้าง Engagement Audience" : "Create Engagement Audience")}
+                            {activeTab === "lookalike" && (isThai ? "สร้าง Lookalike Audience" : "Create Lookalike Audience")}
+                            {activeTab === "interest" && (isThai ? "หาไอเดียกลุ่มเป้าหมายด้วย AI" : "Find Audience Ideas with AI")}
                         </CardTitle>
                         <CardDescription>
-                            {activeTab === "engagement" && "คัดกรองคนที่มีส่วนร่วมกับเพจของคุณ"}
-                            {activeTab === "lookalike" && "ค้นหาคนที่มีพฤติกรรมคล้ายกับฐานลูกค้าเดิม"}
-                            {activeTab === "interest" && "ใส่รายละเอียดสินค้า ให้ AI ช่วยคิด Interests ยิงแอดให้"}
+                            {activeTab === "engagement" && (isThai ? "คัดกรองคนที่มีส่วนร่วมกับเพจของคุณ" : "Filter people who engaged with your page")}
+                            {activeTab === "lookalike" && (isThai ? "ค้นหาคนที่มีพฤติกรรมคล้ายกับฐานลูกค้าเดิม" : "Find people similar to your existing customers")}
+                            {activeTab === "interest" && (isThai ? "ใส่รายละเอียดสินค้า ให้ AI ช่วยคิด Interests ยิงแอดให้" : "Describe your product and let AI suggest targeting interests")}
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
 
                         <div className="space-y-2">
-                            <Label>เลือกบัญชีโฆษณา</Label>
+                            <Label>{isThai ? "เลือกบัญชีโฆษณา" : "Ad Account"}</Label>
                             <Popover open={accountPopoverOpen} onOpenChange={setAccountPopoverOpen}>
                                 <PopoverTrigger asChild>
                                     <Button variant="outline" className="w-full justify-between font-normal">
                                         {adAccountIds.length > 0 ? (
-                                            <span>{adAccountIds.length} บัญชีที่เลือก</span>
+                                            <span>{adAccountIds.length} {isThai ? "บัญชีที่เลือก" : "selected"}</span>
                                         ) : (
-                                            <span className="text-muted-foreground">เลือกบัญชี...</span>
+                                            <span className="text-muted-foreground">{isThai ? "เลือกบัญชี..." : "Select account..."}</span>
                                         )}
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
@@ -439,7 +431,7 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
                                     <div className="border-b px-3 py-2">
                                         <div className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm hover:bg-accent" onClick={selectAllAccounts}>
                                             <Checkbox checked={adAccountIds.length === adAccounts.length && adAccounts.length > 0} />
-                                            เลือกทั้งหมด
+                                            {isThai ? "เลือกทั้งหมด" : "Select all"}
                                         </div>
                                     </div>
                                     <div className="max-h-[280px] overflow-y-auto p-1">
@@ -458,11 +450,13 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
                         {activeTab === "engagement" && (
                             <>
                                 <div className="space-y-2">
-                                    <Label>เงื่อนไข (Audience Type)</Label>
+                                    <Label>{isThai ? "เงื่อนไข (Audience Type)" : "Audience Type"}</Label>
                                     <Popover open={audienceTypePopoverOpen} onOpenChange={setAudienceTypePopoverOpen}>
                                         <PopoverTrigger asChild>
                                             <Button variant="outline" className="w-full justify-between font-normal">
-                                                {audienceTypes.length > 0 ? <span>เลือกแล้ว {audienceTypes.length} แบบ</span> : <span className="text-muted-foreground">เลือกพฤติกรรม...</span>}
+                                                {audienceTypes.length > 0
+                                                    ? <span>{isThai ? `เลือกแล้ว ${audienceTypes.length} แบบ` : `${audienceTypes.length} selected`}</span>
+                                                    : <span className="text-muted-foreground">{isThai ? "เลือกพฤติกรรม..." : "Select behavior..."}</span>}
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
                                         </PopoverTrigger>
@@ -480,14 +474,14 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label>เพจเฟสบุ๊ค (Facebook Pages)</Label>
+                                    <Label>{isThai ? "เพจเฟสบุ๊ค" : "Facebook Pages"}</Label>
                                     <Popover open={pagePopoverOpen} onOpenChange={setPagePopoverOpen}>
                                         <PopoverTrigger asChild>
                                             <Button variant="outline" className="w-full justify-between font-normal">
                                                 {selectedPageIds.length > 0 ? (
-                                                    <span>{selectedPageIds.length} เพจที่เลือก</span>
+                                                    <span>{selectedPageIds.length} {isThai ? "เพจที่เลือก" : "page(s) selected"}</span>
                                                 ) : (
-                                                    <span className="text-muted-foreground">เลือกเพจ...</span>
+                                                    <span className="text-muted-foreground">{isThai ? "เลือกเพจ..." : "Select page..."}</span>
                                                 )}
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
@@ -496,12 +490,14 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
                                             <div className="border-b px-3 py-2">
                                                 <div className="flex w-full cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm hover:bg-accent" onClick={selectAllPages}>
                                                     <Checkbox checked={selectedPageIds.length === pages.length && pages.length > 0} />
-                                                    เลือกทั้งหมด
+                                                    {isThai ? "เลือกทั้งหมด" : "Select all"}
                                                 </div>
                                             </div>
                                             <div className="max-h-[280px] overflow-y-auto p-1">
                                                 {pages.length === 0 && (
-                                                    <div className="p-4 text-center text-sm text-muted-foreground">ไม่พบเพจที่เปิดใช้งาน</div>
+                                                    <div className="p-4 text-center text-sm text-muted-foreground">
+                                                        {isThai ? "ไม่พบเพจที่เปิดใช้งาน" : "No active pages found"}
+                                                    </div>
                                                 )}
                                                 {pages.map((p: any) => (
                                                     <div key={p.pageId} className="flex items-center gap-2 px-2 py-2 rounded-sm hover:bg-accent" onClick={() => togglePage(p.pageId)}>
@@ -517,24 +513,26 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
                                         </PopoverContent>
                                     </Popover>
                                     <p className="text-xs text-muted-foreground mt-1 text-right">
-                                        <Link href="/settings?tab=manager-accounts" className="text-blue-500 hover:underline">จัดการเพจในหน้า Settings</Link>
+                                        <Link href="/settings?tab=manager-accounts" className="text-blue-500 hover:underline">
+                                            {isThai ? "จัดการเพจในหน้า Settings" : "Manage pages in Settings"}
+                                        </Link>
                                     </p>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label>ชื่อกลุ่มเป้าหมาย</Label>
-                                        <Input placeholder="Engagement เพจ" value={audienceName} onChange={(e) => setAudienceName(e.target.value)} />
+                                        <Label>{isThai ? "ชื่อกลุ่มเป้าหมาย" : "Audience Name"}</Label>
+                                        <Input placeholder={isThai ? "Engagement เพจ" : "Page Engagement"} value={audienceName} onChange={(e) => setAudienceName(e.target.value)} />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label>ย้อนหลังกี่วัน (สูงสุด 365)</Label>
+                                        <Label>{isThai ? "ย้อนหลังกี่วัน (สูงสุด 365)" : "Retention Days (max 365)"}</Label>
                                         <Input type="number" min={1} max={365} value={retentionDays} onChange={(e) => setRetentionDays(Number(e.target.value))} />
                                     </div>
                                 </div>
 
                                 <Button onClick={handleCreateEngagement} disabled={creating || selectedPageIds.length === 0 || adAccountIds.length === 0}>
                                     {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                                    สร้างลงในบัญชีโฆษณา
+                                    {isThai ? "สร้างลงในบัญชีโฆษณา" : "Create in Ad Accounts"}
                                 </Button>
                             </>
                         )}
@@ -543,17 +541,19 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
                         {activeTab === "lookalike" && (
                             <>
                                 <div className="space-y-2">
-                                    <Label>เลือกกลุ่มเป้าหมายต้นทาง (Seed Audience)</Label>
+                                    <Label>{isThai ? "เลือกกลุ่มเป้าหมายต้นทาง (Seed Audience)" : "Seed Audience"}</Label>
                                     <Popover open={lookalikeOriginOpen} onOpenChange={setLookalikeOriginOpen}>
                                         <PopoverTrigger asChild>
                                             <Button variant="outline" className="w-full justify-between font-normal">
-                                                {lookalikeOriginId ? audiences.find((a) => a.id === lookalikeOriginId)?.name || lookalikeOriginId : <span className="text-muted-foreground">เลือก Audience...</span>}
+                                                {lookalikeOriginId
+                                                    ? audiences.find((a) => a.id === lookalikeOriginId)?.name || lookalikeOriginId
+                                                    : <span className="text-muted-foreground">{isThai ? "เลือก Audience..." : "Select audience..."}</span>}
                                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                             </Button>
                                         </PopoverTrigger>
                                         <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0" align="start">
                                             <div className="max-h-[300px] overflow-y-auto p-1">
-                                                {loadingAudiences ? <div className="p-4 text-center text-xs">Loading...</div> : null}
+                                                {loadingAudiences ? <div className="p-4 text-center text-xs">{isThai ? "กำลังโหลด..." : "Loading..."}</div> : null}
                                                 {audiences.map((a) => (
                                                     <div key={a.id} className="flex items-center gap-2 px-2 py-2 rounded-sm hover:bg-accent cursor-pointer" onClick={() => { setLookalikeOriginId(a.id); setLookalikeOriginOpen(false); }}>
                                                         <span className="text-sm truncate w-full">{a.name} ({a.accountName})</span>
@@ -566,18 +566,18 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label>ชื่อ Lookalike</Label>
+                                        <Label>{isThai ? "ชื่อ Lookalike" : "Lookalike Name"}</Label>
                                         <Input placeholder="Lookalike 1%" value={lookalikeName} onChange={(e) => setLookalikeName(e.target.value)} />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label>ขนาด (% Ratio, 0.01 = 1%)</Label>
+                                        <Label>{isThai ? "ขนาด (% Ratio, 0.01 = 1%)" : "Size (% Ratio, 0.01 = 1%)"}</Label>
                                         <Input type="number" step="0.01" min={0.01} max={0.2} value={lookalikeRatio} onChange={(e) => setLookalikeRatio(Number(e.target.value))} />
                                     </div>
                                 </div>
 
                                 <Button onClick={handleCreateLookalike} disabled={creating || !lookalikeOriginId || adAccountIds.length === 0}>
                                     {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                                    บันทึก Lookalike
+                                    {isThai ? "บันทึก Lookalike" : "Save Lookalike"}
                                 </Button>
                             </>
                         )}
@@ -586,9 +586,9 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
                         {activeTab === "interest" && (
                             <>
                                 <div className="space-y-2">
-                                    <Label>บอกรายละเอียดสินค้า แบรนด์ หรือกลุ่มคนที่คุณอยากยิงแอดไปหา (AI)</Label>
+                                    <Label>{isThai ? "บอกรายละเอียดสินค้า แบรนด์ หรือกลุ่มคนที่คุณอยากยิงแอดไปหา (AI)" : "Describe your product, brand, or target audience (AI)"}</Label>
                                     <textarea
-                                        placeholder="เช่น ครีมกันแดดสำหรับคนผิวแพ้ง่าย ชอบไปทะเล"
+                                        placeholder={isThai ? "เช่น ครีมกันแดดสำหรับคนผิวแพ้ง่าย ชอบไปทะเล" : "e.g. sunscreen for sensitive skin, beach lovers"}
                                         value={interestDescription}
                                         onChange={(e) => setInterestDescription(e.target.value)}
                                         className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -598,14 +598,14 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
 
                                 <div className="flex items-center py-2">
                                     <div className="border-t w-full" />
-                                    <span className="text-xs text-muted-foreground px-2 shrink-0">หรือใส่เอง</span>
+                                    <span className="text-xs text-muted-foreground px-2 shrink-0">{isThai ? "หรือใส่เอง" : "or enter manually"}</span>
                                     <div className="border-t w-full" />
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label className="text-muted-foreground">คำที่ต้องการ (Manual)</Label>
+                                    <Label className="text-muted-foreground">{isThai ? "คำที่ต้องการ (Manual)" : "Keywords (Manual)"}</Label>
                                     <Input
-                                        placeholder="เช่น cosmetics, skin care, fashion"
+                                        placeholder={isThai ? "เช่น cosmetics, skin care, fashion" : "e.g. cosmetics, skin care, fashion"}
                                         value={interestManualInput}
                                         onChange={(e) => setInterestManualInput(e.target.value)}
                                     />
@@ -613,12 +613,18 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
 
                                 <Button onClick={handleGenerateInterest} disabled={interestGenerating || (interestDescription.trim().length < 5 && !interestManualInput.trim())}>
                                     {interestGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                                    {interestGenerating ? "AI กำลังคิด..." : interestManualInput.trim() ? "ตรวจสอบคำ" : "ให้ AI คิดคำค้นหา"}
+                                    {interestGenerating
+                                        ? (isThai ? "AI กำลังคิด..." : "AI is thinking...")
+                                        : interestManualInput.trim()
+                                            ? (isThai ? "ตรวจสอบคำ" : "Validate Keywords")
+                                            : (isThai ? "ให้ AI คิดคำค้นหา" : "Let AI Generate Interests")}
                                 </Button>
 
                                 {suggestedInterests.length > 0 && (
                                     <div className="space-y-3 rounded-lg border bg-muted/30 p-4 mt-4">
-                                        <p className="text-sm font-medium">คำที่ AI แนะนำ (ผ่านการตรวจสอบกับ Facebook แล้ว)</p>
+                                        <p className="text-sm font-medium">
+                                            {isThai ? "คำที่ AI แนะนำ (ผ่านการตรวจสอบกับ Facebook แล้ว)" : "AI-suggested interests (validated with Facebook)"}
+                                        </p>
                                         <div className="flex flex-wrap gap-2">
                                             {suggestedInterests.map((i, idx) => (
                                                 <Badge key={`${i.id}-${idx}`} variant={i.id ? "default" : "secondary"}>
@@ -629,13 +635,13 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
                                         </div>
                                         <div className="flex gap-2 pt-2">
                                             <Input
-                                                placeholder="ตั้งชื่อ Preset"
+                                                placeholder={isThai ? "ตั้งชื่อ Preset" : "Preset name"}
                                                 value={interestPresetName}
                                                 onChange={(e) => setInterestPresetName(e.target.value)}
                                                 className="max-w-xs"
                                             />
                                             <Button onClick={handleSaveInterestPreset} disabled={interestSaving || !interestPresetName.trim()}>
-                                                Save Preset
+                                                {isThai ? "บันทึก Preset" : "Save Preset"}
                                             </Button>
                                         </div>
                                     </div>
@@ -652,26 +658,30 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
                         <CardHeader className="py-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <CardTitle className="text-base text-gray-800 dark:text-gray-200">กลุ่มเป้าหมายที่มีอยู่แล้ว</CardTitle>
-                                    <CardDescription className="text-xs">จัดการและดูรายละเอียดกลุ่มเป้าหมายที่เคยสร้างไว้</CardDescription>
+                                    <CardTitle className="text-base text-gray-800 dark:text-gray-200">
+                                        {isThai ? "กลุ่มเป้าหมายที่มีอยู่แล้ว" : "Existing Audiences"}
+                                    </CardTitle>
+                                    <CardDescription className="text-xs">
+                                        {isThai ? "จัดการและดูรายละเอียดกลุ่มเป้าหมายที่เคยสร้างไว้" : "Manage and view previously created audiences"}
+                                    </CardDescription>
                                 </div>
                                 {adAccountIds.length > 0 && (
                                     <Button variant="outline" size="sm" className="h-8 text-xs px-3" onClick={loadAudiences} disabled={loadingAudiences}>
                                         {loadingAudiences ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                                        <span className="ml-1.5">รีเฟรช</span>
+                                        <span className="ml-1.5">{isThai ? "รีเฟรช" : "Refresh"}</span>
                                     </Button>
                                 )}
                             </div>
                         </CardHeader>
                         <CardContent>
                             {adAccountIds.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">กรุณาเลือกบัญชีโฆษณาก่อน</p>
+                                <p className="text-sm text-muted-foreground">{isThai ? "กรุณาเลือกบัญชีโฆษณาก่อน" : "Please select an ad account first"}</p>
                             ) : loadingAudiences ? (
                                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <Loader2 className="h-4 w-4 animate-spin" /> กำลังโหลด...
+                                    <Loader2 className="h-4 w-4 animate-spin" /> {isThai ? "กำลังโหลด..." : "Loading..."}
                                 </div>
                             ) : audiences.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">ไม่พบกลุ่มเป้าหมายในบัญชีที่เลือก</p>
+                                <p className="text-sm text-muted-foreground">{isThai ? "ไม่พบกลุ่มเป้าหมายในบัญชีที่เลือก" : "No audiences found in the selected account"}</p>
                             ) : (
                                 <div className="space-y-2">
                                     {audiences.map((a) => (
@@ -680,7 +690,7 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
                                                 <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{a.name}</p>
                                                 <p className="text-[11px] text-muted-foreground mt-0.5">
                                                     ID: {a.id}
-                                                    {a.accountName && ` · บัญชี: ${a.accountName}`}
+                                                    {a.accountName && ` · ${isThai ? "บัญชี" : "Account"}: ${a.accountName}`}
                                                 </p>
                                             </div>
                                             <div className="flex shrink-0 items-center gap-2">
@@ -706,7 +716,7 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
 
             {activeTab === "interest" && interestPresets.length > 0 && (
                 <div className="mt-8 max-w-3xl mx-auto">
-                    <h3 className="font-semibold mb-4 text-lg">Presets ที่บันทึกไว้</h3>
+                    <h3 className="font-semibold mb-4 text-lg">{isThai ? "Presets ที่บันทึกไว้" : "Saved Presets"}</h3>
                     <div className="grid gap-4">
                         {interestPresets.map(p => (
                             <Card key={p.id} className="p-4 rounded-xl border-gray-200 dark:border-gray-800 shadow-sm">
@@ -726,24 +736,25 @@ export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
             <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>ยืนยันการลบกลุ่มเป้าหมาย?</AlertDialogTitle>
+                        <AlertDialogTitle>{isThai ? "ยืนยันการลบกลุ่มเป้าหมาย?" : "Delete audience?"}</AlertDialogTitle>
                         <AlertDialogDescription>
                             {deleteTarget && (
                                 <>
-                                    คุณกำลังจะลบกลุ่มเป้าหมาย <strong>{deleteTarget.name}</strong> ใช่หรือไม่?
-                                    การกระทำนี้ไม่สามารถย้อนกลับได้
+                                    {isThai
+                                        ? <>คุณกำลังจะลบ <strong>{deleteTarget.name}</strong> ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้</>
+                                        : <>You are about to delete <strong>{deleteTarget.name}</strong>. This action cannot be undone.</>}
                                 </>
                             )}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                        <AlertDialogCancel>{isThai ? "ยกเลิก" : "Cancel"}</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={(e) => { e.preventDefault(); void handleDelete(); }}
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             disabled={deleting}
                         >
-                            {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "ลบข้อมูล"}
+                            {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isThai ? "ลบข้อมูล" : "Delete")}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

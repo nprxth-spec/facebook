@@ -115,48 +115,49 @@ export async function GET(req: Request) {
     })
   );
 
-  // First pass: extract page info inline from expanded actor_id / page_id objects
-  // Collect IDs that still need a name lookup (e.g. IDs from effective_object_story_id split)
-  const missingPageIds = new Set<string>();
+  // --- Page name lookup: DB first, Facebook API as fallback ---
+  // Collect all page IDs referenced by ads
+  const allPageIds = new Set<string>();
   for (const ad of allAds) {
     const creatives: any[] = ad.adcreatives?.data || [];
     for (const c of creatives) {
       const actorObj = typeof c.actor_id === "object" && c.actor_id !== null ? c.actor_id : null;
-      const pageIdObj = typeof c.object_story_spec?.page_id === "object" && c.object_story_spec?.page_id !== null
-        ? c.object_story_spec.page_id : null;
-      const storyPid = (c.effective_object_story_id || c.object_story_id || "").split("_")[0];
+      const actorIdStr = typeof c.actor_id === "string" ? c.actor_id : null;
+      const spec = c.object_story_spec;
+      const specPageId = spec?.page_id != null ? String(spec.page_id) : null;
+      const storyPid = (c.effective_object_story_id || c.object_story_id || "").split("_")[0] || null;
+      const pid = actorObj?.id || actorIdStr || specPageId || storyPid || null;
+      if (pid) allPageIds.add(String(pid));
+      break;
+    }
+  }
 
-      const pid = actorObj?.id || pageIdObj?.id ||
-        (typeof c.object_story_spec?.page_id === "string" ? c.object_story_spec.page_id : null) ||
-        storyPid || null;
+  // 1. Look up in local DB (no API quota!)
+  const pagesData: Record<string, { name: string; username?: string | null }> = {};
+  if (allPageIds.size > 0) {
+    const dbPages = await prisma.facebookPage.findMany({
+      where: { userId: session.user.id, pageId: { in: Array.from(allPageIds) } },
+      select: { pageId: true, name: true, username: true },
+    });
+    dbPages.forEach((p) => { pagesData[p.pageId] = { name: p.name, username: p.username }; });
 
-      if (pid && !actorObj?.name && !pageIdObj?.name) {
-        missingPageIds.add(String(pid));
+    // 2. Fallback: batch-fetch from Facebook for page IDs not in DB
+    const missingFromDb = Array.from(allPageIds).filter((id) => !pagesData[id]);
+    if (missingFromDb.length > 0) {
+      const fbChunks = [];
+      for (let i = 0; i < missingFromDb.length; i += 50) {
+        const chunk = missingFromDb.slice(i, i + 50);
+        const pUrl = new URL(`${FB_API}`);
+        pUrl.searchParams.set("ids", chunk.join(","));
+        pUrl.searchParams.set("fields", "name,username");
+        pUrl.searchParams.set("access_token", token);
+        fbChunks.push(fetch(pUrl.toString()).then((r) => r.json()).catch(() => null));
       }
-      break; // only first creative matters for page id
+      const results = await Promise.all(fbChunks);
+      results.forEach((d) => { if (d && !d.error) Object.assign(pagesData, d); });
     }
   }
 
-  // Batch fetch names ONLY for remaining page IDs that have no inline name
-  const pagesData: Record<string, any> = {};
-  if (missingPageIds.size > 0) {
-    const missingArr = Array.from(missingPageIds);
-    const pageChunkPromises = [];
-    for (let i = 0; i < missingArr.length; i += 50) {
-      const chunk = missingArr.slice(i, i + 50);
-      const pUrl = new URL(`${FB_API}`);
-      pUrl.searchParams.set("ids", chunk.join(","));
-      pUrl.searchParams.set("fields", "name,username");
-      pUrl.searchParams.set("access_token", token);
-      pageChunkPromises.push(
-        fetch(pUrl.toString())
-          .then((r) => r.json())
-          .catch(() => null)
-      );
-    }
-    const results = await Promise.all(pageChunkPromises);
-    results.forEach((d) => { if (d && !d.error) Object.assign(pagesData, d); });
-  }
 
   const searchLower = query.search?.toLowerCase() ?? "";
 
@@ -218,21 +219,20 @@ export async function GET(req: Request) {
       let pageUsername: string | null = null;
 
       if (creative) {
-        // Extract page info - prefer inline expanded objects, fall back to pagesData for story-id cases
         const creatives = ad.adcreatives?.data || [];
         for (const c of creatives) {
           const actorObj = typeof c.actor_id === "object" && c.actor_id !== null ? c.actor_id : null;
-          const pageIdObj = typeof c.object_story_spec?.page_id === "object" && c.object_story_spec?.page_id !== null
-            ? c.object_story_spec.page_id : null;
-          const rawPageId = typeof c.object_story_spec?.page_id === "string" ? c.object_story_spec.page_id : null;
-          const storyPid = (c.effective_object_story_id || c.object_story_id || "").split("_")[0];
+          const actorIdStr = typeof c.actor_id === "string" ? c.actor_id : null;
+          const spec = c.object_story_spec;
+          const specPageId = spec?.page_id != null ? String(spec.page_id) : null;
+          const storyPid = (c.effective_object_story_id || c.object_story_id || "").split("_")[0] || null;
 
-          const pid = actorObj?.id || pageIdObj?.id || rawPageId || storyPid || null;
+          const pid = actorObj?.id || actorIdStr || specPageId || storyPid || null;
 
           if (pid) {
             pageId = String(pid);
-            pageName = actorObj?.name || pageIdObj?.name || pagesData[pid]?.name || null;
-            pageUsername = actorObj?.username || pageIdObj?.username || pagesData[pid]?.username || null;
+            pageName = actorObj?.name || pagesData[pid]?.name || null;
+            pageUsername = actorObj?.username || pagesData[pid]?.username || null;
             break;
           }
         }

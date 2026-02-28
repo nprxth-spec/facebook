@@ -82,12 +82,15 @@ function ToolsPageContent() {
                     </TabsList>
                 </div>
 
-                <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="flex-1 min-h-0 overflow-y-scroll">
                     <Suspense fallback={<TabLoadingState />}>
-                        <AudiencesContent activeTab={activeTab} />
+                        <div key={activeTab} style={{ animation: "tabFadeIn 0.18s ease-out" }}>
+                            <AudiencesContent activeTab={activeTab} />
+                        </div>
                     </Suspense>
                 </div>
             </Tabs>
+            <style>{`@keyframes tabFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
         </div>
     );
 }

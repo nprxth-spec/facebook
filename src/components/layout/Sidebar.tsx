@@ -12,6 +12,7 @@ import {
   Zap,
   BarChart3,
   Wrench,
+  Sparkles,
 } from "lucide-react";
 import React from "react";
 import { useTheme } from "@/components/providers/ThemeProvider";
@@ -23,19 +24,24 @@ const navItems = [
     icon: LayoutDashboard,
   },
   {
-    key: "export",
-    href: "/export",
-    icon: FileSpreadsheet,
-  },
-  {
     key: "ads",
     href: "/ads",
     icon: BarChart3,
   },
   {
+    key: "create",
+    href: "/create",
+    icon: Sparkles,
+  },
+  {
     key: "tools",
     href: "/tools",
     icon: Wrench,
+  },
+  {
+    key: "export",
+    href: "/export",
+    icon: FileSpreadsheet,
   },
   {
     key: "settings",
