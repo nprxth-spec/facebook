@@ -20,8 +20,8 @@ export async function GET() {
             return NextResponse.json({ error: "No Facebook access token found" }, { status: 400 });
         }
 
-        // Fetch pages (accounts) the user manages
-        const url = `${FB_API}/me/accounts?fields=id,name,category,access_token,tasks&limit=100&access_token=${accessToken}`;
+        // Fetch pages (accounts) the user manages - include username and verification_status
+        const url = `${FB_API}/me/accounts?fields=id,name,category,access_token,username,verification_status&limit=100&access_token=${accessToken}`;
         const res = await fetch(url);
         const data = await res.json();
 
@@ -33,17 +33,35 @@ export async function GET() {
             );
         }
 
-        // Process paginated data if necessary (simplified for most use cases with <100 pages)
-        const rawPages = data.data || [];
+        const rawPages: Array<{
+            id: string;
+            name: string;
+            category?: string;
+            access_token?: string;
+            username?: string;
+            verification_status?: string;
+        }> = data.data || [];
 
-        // We filter for pages where the user has CREATE_CONTENT or MANAGE permissions, 
-        // or just return them all if that logic is too strict for engagement creation.
-        // For Custom Audiences, just having them in the list usually indicates enough permission.
-        const pages = rawPages.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            category: p.category,
-            hasToken: !!p.access_token,
+        // Fetch page_status individually using page access tokens
+        const pages = await Promise.all(rawPages.map(async (p) => {
+            let pageStatus: string | null = null;
+            if (p.access_token) {
+                try {
+                    const detailRes = await fetch(`${FB_API}/${p.id}?fields=page_status&access_token=${p.access_token}`);
+                    const detailData = await detailRes.json();
+                    pageStatus = detailData.page_status ?? null;
+                } catch {
+                    // ignore
+                }
+            }
+            return {
+                id: p.id,
+                name: p.name,
+                username: p.username ?? null,
+                category: p.category,
+                pageStatus,
+                hasToken: !!p.access_token,
+            };
         }));
 
         return NextResponse.json({ pages });

@@ -75,12 +75,14 @@ model ManagerAccount {
 }
 
 model FacebookPage {
-  id        String   @id @default(cuid())
-  userId    String
-  pageId    String
-  name      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  pageId     String
+  name       String
+  username   String?
+  pageStatus String?  // e.g. "PUBLISHED", "UNPUBLISHED", "CLOSED"
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

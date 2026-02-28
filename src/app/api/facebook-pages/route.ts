@@ -36,15 +36,21 @@ export async function POST(req: Request) {
     if (page) {
         page = await prisma.facebookPage.update({
             where: { id: page.id },
-            data: { name: body.name }
+            data: {
+                name: body.name,
+                username: body.username ?? null,
+                pageStatus: body.pageStatus ?? null,
+            }
         });
     } else {
         page = await prisma.facebookPage.create({
             data: {
                 userId,
-                isActive: false, // Default to inactive when first synced
+                isActive: false,
                 pageId: body.pageId,
                 name: body.name,
+                username: body.username ?? null,
+                pageStatus: body.pageStatus ?? null,
             },
         });
     }

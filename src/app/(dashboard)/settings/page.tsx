@@ -23,7 +23,7 @@ import { useTheme } from "@/components/providers/ThemeProvider";
 import { Language } from "@/lib/translations";
 
 interface ManagerAccount { id: string; accountId: string; name: string; platform: string; isActive: boolean }
-interface FacebookPage { id: string; pageId: string; name: string; isActive: boolean }
+interface FacebookPage { id: string; pageId: string; name: string; username?: string | null; pageStatus?: string | null; isActive: boolean }
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -150,6 +150,8 @@ function SettingsContent() {
   const [pagesLoading, setPagesLoading] = useState(true);
   const [pagesSearch, setPagesSearch] = useState("");
   const [syncingPages, setSyncingPages] = useState(false);
+  const [pagesPage, setPagesPage] = useState(1);
+  const PAGES_PER_PAGE = 10;
 
 
   const initials = useMemo(() => {
@@ -335,6 +337,10 @@ function SettingsContent() {
     setAccountsPage(1);
   }, [accountsSearch]);
 
+  useEffect(() => {
+    setPagesPage(1);
+  }, [pagesSearch]);
+
   // Use a generic function to save specific setting types while updating local & global state
   const handlePreferenceChange = async (key: "theme" | "accentColor" | "language" | "timezone", val: string) => {
     // Optimistic UI updates
@@ -444,7 +450,7 @@ function SettingsContent() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || "Failed to fetch pages");
 
-      const pagesFromFb: { id: string; name: string }[] = data.pages ?? [];
+      const pagesFromFb: { id: string; name: string; username?: string | null; pageStatus?: string | null }[] = data.pages ?? [];
       if (!pagesFromFb.length) {
         toast.info(isThai ? "ไม่พบเพจใน Facebook" : "No pages found on Facebook");
         return;
@@ -455,7 +461,7 @@ function SettingsContent() {
           fetch("/api/facebook-pages", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pageId: page.id, name: page.name }),
+            body: JSON.stringify({ pageId: page.id, name: page.name, username: page.username, pageStatus: page.pageStatus }),
           }).catch(() => null)
         )
       );
@@ -1102,45 +1108,131 @@ function SettingsContent() {
                         {isThai ? "กดปุ่ม “ดึงเพจจาก Facebook” เพื่อโหลด" : "Click “Sync Pages” to load pages."}
                       </p>
                     </div>
-                  ) : (
-                    <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-xl">
-                      <table className="w-full text-sm">
-                        <thead className="bg-gray-50 dark:bg-gray-800/60">
-                          <tr>
-                            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                              {isThai ? "ชื่อเพจ" : "Page Name"}
-                            </th>
-                            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                              {isThai ? "เพจ ID" : "Page ID"}
-                            </th>
-                            <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                              {isThai ? "การใช้งานร่วมกับระบบแอด" : "Active for Audiences"}
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fbPages
-                            .filter(p => p.name.toLowerCase().includes(pagesSearch.toLowerCase()) || p.pageId.includes(pagesSearch))
-                            .map((page) => (
-                              <tr
-                                key={page.id}
-                                className="border-b border-gray-200 dark:border-gray-700 last:border-b-0"
-                              >
-                                <td className="px-4 py-1.5 font-medium text-gray-900 dark:text-gray-100">
-                                  {page.name}
-                                </td>
-                                <td className="px-4 py-1.5 text-gray-600 dark:text-gray-400">
-                                  {page.id}
-                                </td>
-                                <td className="px-4 py-1.5 text-center">
-                                  <Switch className="scale-75 data-[state=checked]:bg-green-500" checked={page.isActive} onCheckedChange={() => toggleFacebookPage(page)} />
-                                </td>
+                  ) : (() => {
+                    const filteredPages = fbPages.filter(
+                      p => p.name.toLowerCase().includes(pagesSearch.toLowerCase()) || p.pageId.includes(pagesSearch) || (p.username ?? "").toLowerCase().includes(pagesSearch.toLowerCase())
+                    );
+                    const totalPagePages = Math.ceil(filteredPages.length / PAGES_PER_PAGE);
+                    const pagedPages = filteredPages.slice((pagesPage - 1) * PAGES_PER_PAGE, pagesPage * PAGES_PER_PAGE);
+                    return (
+                      <>
+                        <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-xl">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50 dark:bg-gray-800/60">
+                              <tr>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                  {isThai ? "ชื่อเพจ" : "Page"}
+                                </th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                  Username
+                                </th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                  {isThai ? "เพจ ID" : "Page ID"}
+                                </th>
+                                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                  {isThai ? "สถานะ" : "Status"}
+                                </th>
+                                <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                  {isThai ? "การใช้งาน" : "Active"}
+                                </th>
                               </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                            </thead>
+                            <tbody>
+                              {pagedPages.map((page) => (
+                                <tr
+                                  key={page.id}
+                                  className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
+                                >
+                                  {/* Page Name + Profile Pic */}
+                                  <td className="px-4 py-1.5">
+                                    <div className="flex items-center gap-2.5">
+                                      <div className="relative w-8 h-8 shrink-0">
+                                        <img
+                                          src={`https://graph.facebook.com/${page.pageId}/picture?type=square`}
+                                          alt={page.name}
+                                          className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-gray-700 bg-gray-100"
+                                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                        />
+                                        <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#1877F2] flex items-center justify-center border border-white dark:border-gray-900">
+                                          <FacebookIcon className="w-2 h-2 text-white" />
+                                        </span>
+                                      </div>
+                                      <span className="font-medium text-gray-900 dark:text-gray-100 truncate max-w-[160px]">{page.name}</span>
+                                    </div>
+                                  </td>
+                                  {/* Username */}
+                                  <td className="px-4 py-1.5 text-gray-500 dark:text-gray-400 text-xs">
+                                    {page.username ? (
+                                      <span className="font-mono">@{page.username}</span>
+                                    ) : (
+                                      <span className="text-gray-300 dark:text-gray-600">—</span>
+                                    )}
+                                  </td>
+                                  {/* Page ID */}
+                                  <td className="px-4 py-1.5 text-gray-500 dark:text-gray-400 font-mono text-xs">
+                                    {page.pageId}
+                                  </td>
+                                  {/* Status */}
+                                  <td className="px-4 py-1.5">
+                                    {page.pageStatus === "PUBLISHED" ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs px-2 py-0.5 font-medium">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                                        {isThai ? "เผยแพร่" : "Published"}
+                                      </span>
+                                    ) : page.pageStatus === "UNPUBLISHED" ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 text-xs px-2 py-0.5 font-medium">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block" />
+                                        {isThai ? "ไม่ได้เผยแพร่" : "Unpublished"}
+                                      </span>
+                                    ) : page.pageStatus ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-xs px-2 py-0.5">
+                                        {page.pageStatus}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-300 dark:text-gray-600 text-xs">—</span>
+                                    )}
+                                  </td>
+                                  {/* Toggle */}
+                                  <td className="px-4 py-1.5 text-center">
+                                    <Switch className="scale-75 data-[state=checked]:bg-green-500" checked={page.isActive} onCheckedChange={() => toggleFacebookPage(page)} />
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        {/* Pagination */}
+                        {filteredPages.length > PAGES_PER_PAGE && (
+                          <div className="flex items-center justify-between pt-3">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {isThai ? "แสดง" : "Showing"}{" "}
+                              {(pagesPage - 1) * PAGES_PER_PAGE + 1}–
+                              {Math.min(pagesPage * PAGES_PER_PAGE, filteredPages.length)}{" "}
+                              {isThai ? "จาก" : "of"} {filteredPages.length}{" "}
+                              {isThai ? "เพจ" : "pages"}
+                            </p>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="outline" size="sm" className="h-7 px-2 text-xs"
+                                disabled={pagesPage === 1}
+                                onClick={() => setPagesPage(p => Math.max(1, p - 1))}
+                              >
+                                {isThai ? "ก่อนหน้า" : "Previous"}
+                              </Button>
+                              <span className="text-xs text-gray-500 px-1">{pagesPage} / {totalPagePages}</span>
+                              <Button
+                                variant="outline" size="sm" className="h-7 px-2 text-xs"
+                                disabled={pagesPage >= totalPagePages}
+                                onClick={() => setPagesPage(p => Math.min(totalPagePages, p + 1))}
+                              >
+                                {isThai ? "ถัดไป" : "Next"}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </section>
               )}
 
