@@ -13,16 +13,17 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { useTheme } from "@/components/providers/ThemeProvider";
 
-const AUDIENCE_TYPE_KEYS = [
-    "page_engaged",
-    "page_visited",
-    "page_messaged",
-    "page_post_interaction",
-    "page_cta_clicked",
-    "page_or_post_save",
-    "page_liked",
-] as const;
+const AUDIENCE_TYPE_LABELS: Record<string, { th: string; en: string }> = {
+    page_engaged: { th: "คนที่มีส่วนร่วมกับเพจ", en: "People who engaged with page" },
+    page_visited: { th: "คนที่เคยเข้ามาดูเพจ", en: "People who visited page" },
+    page_messaged: { th: "คนที่เคยส่งข้อความหาเพจ", en: "People who messaged page" },
+    page_post_interaction: { th: "คนที่มีส่วนร่วมกับโพสต์หรือโฆษณา", en: "People who engaged with post/ad" },
+    page_cta_clicked: { th: "คนที่คลิกปุ่ม Call-to-Action", en: "People who clicked CTA" },
+    page_or_post_save: { th: "คนที่บันทึกเพจหรือโพสต์", en: "People who saved page/post" },
+    page_liked: { th: "คนที่กดถูกใจหรือติดตามเพจ", en: "People who liked or followed page" },
+};
 
 interface CustomAudience {
     id: string;
@@ -42,8 +43,8 @@ interface InterestPreset {
 }
 
 export default function AudiencesPage() {
-    // Using static 'th' locale strings for simplicity in this port
-    const isThai = true;
+    const { language } = useTheme();
+    const isThai = language === 'th';
 
     // Emulate useAdAccount context with local state populated from /api/manager-accounts
     const [adAccounts, setAdAccounts] = useState<any[]>([]);
@@ -448,10 +449,10 @@ export default function AudiencesPage() {
                                         </PopoverTrigger>
                                         <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0" align="start">
                                             <div className="p-1">
-                                                {AUDIENCE_TYPE_KEYS.map((key) => (
+                                                {Object.entries(AUDIENCE_TYPE_LABELS).map(([key, labels]) => (
                                                     <div key={key} className="flex items-center gap-2 px-2 py-2 rounded-sm hover:bg-accent cursor-pointer" onClick={() => toggleAudienceType(key)}>
                                                         <Checkbox checked={audienceTypes.includes(key)} />
-                                                        <span className="text-sm">{key}</span>
+                                                        <span className="text-sm">{isThai ? labels.th : labels.en}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -486,7 +487,11 @@ export default function AudiencesPage() {
                                                 {pages.map((p: any) => (
                                                     <div key={p.pageId} className="flex items-center gap-2 px-2 py-2 rounded-sm hover:bg-accent" onClick={() => togglePage(p.pageId)}>
                                                         <Checkbox checked={selectedPageIds.includes(p.pageId)} />
-                                                        <span className="text-sm font-medium">{p.name} <span className="text-xs text-muted-foreground ml-1">({p.pageId})</span></span>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-medium">{p.name}</span>
+                                                            {p.username && <span className="text-xs text-muted-foreground">@{p.username}</span>}
+                                                            <span className="text-[10px] text-muted-foreground opacity-50">{p.pageId}</span>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
