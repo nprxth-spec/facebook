@@ -35,7 +35,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             "pages_messaging",
             "pages_manage_metadata",
             "pages_read_engagement",
-            "pages_utility_messaging",
           ].join(","),
         },
       },
