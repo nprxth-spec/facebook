@@ -101,6 +101,8 @@ Based on what you see in this image, provide:
 1. A compelling ${isThai ? "Thai" : "English"} ad caption (primary text) — 2-3 sentences, conversational, with emojis appropriate for Thai Facebook ads
 2. A short punchy headline — max 40 chars
 3. Target audience: suggest 4-8 Facebook interest names in ENGLISH (for Meta targeting API), suitable age range
+4. A Messenger welcome greeting in ${isThai ? "Thai" : "English"} (e.g., สวัสดีค่ะ สนใจสินค้าตัวไหนสอบถามได้เลยนะคะ)
+5. 3 short Messenger icebreaker questions in ${isThai ? "Thai" : "English"} (e.g., สนใจสั่งซื้อค่ะ, ขอทราบราคาค่ะ, มีโปรโมชั่นไหมคะ)
 
 Return ONLY this JSON structure:
 {
@@ -111,6 +113,10 @@ Return ONLY this JSON structure:
     "ageMin": 20,
     "ageMax": 45,
     "interests": ["Interest1", "Interest2", "Interest3", "Interest4"]
+  },
+  "messenger": {
+    "greeting": "...",
+    "questions": ["...", "...", "..."]
   }
 }`;
 
@@ -144,6 +150,10 @@ Return ONLY this JSON structure:
                 ageMin: result.audience?.ageMin || 20,
                 ageMax: result.audience?.ageMax || 45,
                 interests: Array.isArray(result.audience?.interests) ? result.audience.interests : [],
+            },
+            messenger: {
+                greeting: result.messenger?.greeting || "",
+                questions: Array.isArray(result.messenger?.questions) ? result.messenger.questions : [],
             },
         });
     } catch (e: any) {

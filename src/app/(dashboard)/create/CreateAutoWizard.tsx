@@ -34,6 +34,7 @@ interface AiAnalysisResult {
     headline: string;
     reasoning: string;
     audience: { ageMin: number; ageMax: number; interests: string[]; };
+    messenger?: { greeting: string; questions: string[] };
 }
 
 const OBJECTIVES = [
@@ -318,6 +319,24 @@ export default function CreateAutoWizard() {
         const newInterests = aiResult.audience.interests.map((name) => ({ id: name, name }));
         setManualInterests(newInterests);
         toast.success(isThai ? "✅ นำกลุ่มเป้าหมาย AI ไปใช้แล้ว" : "✅ AI audience applied!");
+    };
+
+    const applyAiMessenger = () => {
+        if (!aiResult || !aiResult.messenger) return;
+
+        // Ensure Messenger is checked in placements
+        if (!placements.includes("messenger")) setPlacements((p) => [...p, "messenger"]);
+
+        // Switch to manual template mode
+        setSelectedTemplateId("manual");
+
+        setGreeting(aiResult.messenger.greeting);
+        const newIceBreakers = aiResult.messenger.questions.map(q => ({ question: q, payload: "" }));
+        // Pad to ensure at least 1 input exists
+        if (newIceBreakers.length === 0) newIceBreakers.push({ question: "", payload: "" });
+
+        setIceBreakers(newIceBreakers);
+        toast.success(isThai ? "✅ นำเทมเพลตแชท AI ไปใช้แล้ว" : "✅ AI Messenger Template applied!");
     };
 
     // ──── Launch ───────────────────────────────────────────────────────────────
@@ -698,6 +717,35 @@ export default function CreateAutoWizard() {
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            {/* Messenger block */}
+                                            {aiResult.messenger && (
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <Label className="text-xs font-semibold text-violet-700 dark:text-violet-300">
+                                                            💬 {isThai ? "ข้อความแชทแนะนำ" : "Suggested Messenger"}
+                                                        </Label>
+                                                        <Button size="sm" className="h-6 text-xs px-3 bg-violet-600 hover:bg-violet-700 text-white" onClick={applyAiMessenger}>
+                                                            {isThai ? "ใช้เลย" : "Apply"}
+                                                        </Button>
+                                                    </div>
+                                                    <div className="rounded-lg border border-violet-200 dark:border-violet-700 bg-white dark:bg-violet-950/30 p-3 space-y-2">
+                                                        <div>
+                                                            <p className="text-xs text-muted-foreground mb-1">Greeting</p>
+                                                            <p className="text-sm font-medium">{aiResult.messenger.greeting}</p>
+                                                        </div>
+                                                        <Separator />
+                                                        <div>
+                                                            <p className="text-xs text-muted-foreground mb-1">Icebreakers</p>
+                                                            <ul className="list-disc pl-4 text-sm space-y-1">
+                                                                {aiResult.messenger.questions.map((q, i) => (
+                                                                    <li key={i}>{q}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>
