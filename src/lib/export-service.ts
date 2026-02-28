@@ -43,10 +43,12 @@ interface ColumnMapping {
     sheetCol: string;
 }
 
+import type { OAuth2Client } from "google-auth-library";
+
 export interface ExportServiceOptions {
     userId: string;
     fbToken: string;
-    oauth2Client: any; // Using any for the google-auth-library OAuth2Client to avoid complex type imports here
+    oauth2Client: OAuth2Client;
     adAccountIds: string[];
     googleSheetId: string;
     description?: string;
@@ -122,7 +124,7 @@ async function fetchFbInsights(
 function sumActionArray(row: Record<string, unknown>, fieldName: string): number {
     const actions = row[fieldName];
     if (!Array.isArray(actions)) return 0;
-    return actions.reduce((sum, a: any) => {
+    return actions.reduce((sum, a: { value?: string | number }) => {
         const v = parseFloat(String(a?.value ?? "0"));
         return sum + (Number.isFinite(v) ? v : 0);
     }, 0);
@@ -158,7 +160,7 @@ function getMetricValue(fbRow: Record<string, unknown>, fbCol: string): number {
     if (fbCol === "cost_per_conversion") {
         const raw = fbRow["cost_per_action_type"];
         if (!Array.isArray(raw)) return 0;
-        const match = raw.find((a: any) => typeof a.action_type === "string" && a.action_type.startsWith("offsite_conversion.fb_pixel_purchase"));
+        const match = raw.find((a: { action_type?: string, value?: string | number }) => typeof a.action_type === "string" && a.action_type.startsWith("offsite_conversion.fb_pixel_purchase"));
         const v = parseFloat(String(match?.value ?? "0"));
         return Number.isFinite(v) ? v : 0;
     }
@@ -199,7 +201,7 @@ function mapRowToSheetRow(
             } else if (m.fbCol === "cost_per_conversion") {
                 const raw = fbRow["cost_per_action_type"];
                 if (Array.isArray(raw)) {
-                    const match = raw.find((a: any) => typeof a.action_type === "string" && a.action_type.startsWith("offsite_conversion.fb_pixel_purchase"));
+                    const match = raw.find((a: { action_type?: string, value?: string | number }) => typeof a.action_type === "string" && a.action_type.startsWith("offsite_conversion.fb_pixel_purchase"));
                     value = String(match?.value ?? "0");
                 } else {
                     value = "0";

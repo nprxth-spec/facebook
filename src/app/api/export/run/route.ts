@@ -3,6 +3,7 @@ import { getFacebookToken, getGoogleClient } from "@/lib/tokens";
 import { NextResponse } from "next/server";
 import { runExportTask } from "@/lib/export-service";
 import { prisma } from "@/lib/db";
+import { assertSameOrigin } from "@/lib/security";
 
 interface ColumnMapping {
   fbCol: string;
@@ -21,6 +22,12 @@ interface ExportRequest {
 }
 
 export async function POST(req: Request) {
+  try {
+    assertSameOrigin(req);
+  } catch {
+    return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
+  }
+
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

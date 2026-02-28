@@ -23,6 +23,7 @@ import { useTheme } from "@/components/providers/ThemeProvider";
 import { Language } from "@/lib/translations";
 
 interface ManagerAccount { id: string; accountId: string; name: string; platform: string; isActive: boolean }
+interface FacebookPage { id: string; pageId: string; name: string; isActive: boolean }
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -76,7 +77,7 @@ function SettingsContent() {
   const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const VALID_TABS = ["account", "connections", "manager-accounts", "billing", "preferences", "delete"];
+  const VALID_TABS = ["account", "connections", "manager-accounts", "facebook-pages", "billing", "preferences", "delete"];
   const activeTab = VALID_TABS.includes(searchParams.get("tab") ?? "") ? (searchParams.get("tab") as string) : "account";
   const setActiveTab = useCallback((tab: string) => {
     router.push(`/settings?tab=${tab}`, { scroll: false });
@@ -143,6 +144,12 @@ function SettingsContent() {
   const [newAccountName, setNewAccountName] = useState("");
   const [addingAccount, setAddingAccount] = useState(false);
   const ACCOUNTS_PER_PAGE = 10;
+
+  // Facebook pages
+  const [fbPages, setFbPages] = useState<FacebookPage[]>([]);
+  const [pagesLoading, setPagesLoading] = useState(true);
+  const [pagesSearch, setPagesSearch] = useState("");
+  const [syncingPages, setSyncingPages] = useState(false);
 
 
   const initials = useMemo(() => {
@@ -274,40 +281,55 @@ function SettingsContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const reloadManagerAccounts = async () => {
+  const reloadManagerAccounts = useCallback(async () => {
     setAccountsLoading(true);
     try {
       const res = await fetch("/api/manager-accounts");
       const data = await res.json();
-      if (Array.isArray(data)) {
-        setAccounts(data);
-        setAccountsPage(1);
-      }
-      // โหลดสถานะจาก Facebook อีกครั้ง
+      if (Array.isArray(data)) setAccounts(data);
+
+      // Check Facebook ad account status
       try {
         const fbRes = await fetch("/api/facebook/ad-accounts");
         const fbData = await fbRes.json();
         if (!fbData.error && Array.isArray(fbData.accounts)) {
           const map: Record<string, number> = {};
-          fbData.accounts.forEach(
-            (acc: { id: string; accountId: string; status?: number }) => {
-              if (typeof acc.status === "number") {
-                map[acc.id] = acc.status;
-                map[acc.accountId] = acc.status;
-              }
+          for (const acc of fbData.accounts) {
+            if (typeof acc.status === "number") {
+              map[acc.id] = acc.status;
+              map[acc.accountId] = acc.status;
             }
-          );
+          }
           setFbStatuses(map);
         }
-      } catch {
-        // ignore
-      }
+      } catch {/* ignore */ }
     } catch {
       toast.error("โหลดบัญชีไม่สำเร็จ");
     } finally {
       setAccountsLoading(false);
     }
-  };
+  }, []);
+
+  const reloadFacebookPages = useCallback(async () => {
+    setPagesLoading(true);
+    try {
+      const res = await fetch("/api/facebook-pages");
+      const data = await res.json();
+      if (Array.isArray(data)) setFbPages(data);
+    } catch {
+      toast.error(isThai ? "โหลดเพจไม่สำเร็จ" : "Failed to load pages");
+    } finally {
+      setPagesLoading(false);
+    }
+  }, [isThai]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return; // Wait for session to load
+
+    // Reload data when tab changes
+    if (activeTab === "manager-accounts") reloadManagerAccounts();
+    if (activeTab === "facebook-pages") reloadFacebookPages();
+  }, [reloadManagerAccounts, reloadFacebookPages, activeTab, session?.user?.id]);
 
   useEffect(() => {
     setAccountsPage(1);
@@ -316,9 +338,9 @@ function SettingsContent() {
   // Use a generic function to save specific setting types while updating local & global state
   const handlePreferenceChange = async (key: "theme" | "accentColor" | "language" | "timezone", val: string) => {
     // Optimistic UI updates
-    if (key === "theme") { setTheme(val as any); setGlobalTheme(val as any); }
+    if (key === "theme") { setTheme(val as "light" | "dark" | "system"); setGlobalTheme(val as "light" | "dark" | "system"); }
     if (key === "accentColor") { setAccent(val); setGlobalAccent(val); }
-    if (key === "language") { setLanguage(val as any); setGlobalLanguage(val as Language); }
+    if (key === "language") { setLanguage(val as Language); setGlobalLanguage(val as Language); }
     if (key === "timezone") { setTimezone(val); setGlobalTimezone(val); }
 
     setPrefsSaving(true);
@@ -394,6 +416,59 @@ function SettingsContent() {
     }
   };
 
+  const toggleFacebookPage = async (page: FacebookPage) => {
+    const originalState = page.isActive;
+    const newState = !originalState;
+
+    setFbPages((p) => p.map((a) => (a.id === page.id ? { ...a, isActive: newState } : a)));
+
+    try {
+      const res = await fetch("/api/facebook-pages", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: page.id, isActive: newState }),
+      });
+      if (!res.ok) throw new Error("Failed to update page");
+      const updated = await res.json();
+      setFbPages((p) => p.map((a) => (a.id === page.id ? updated : a)));
+    } catch (error) {
+      setFbPages((p) => p.map((a) => (a.id === page.id ? { ...a, isActive: originalState } : a)));
+      toast.error(isThai ? "บันทึกการตั้งค่าไม่สำเร็จ" : "Failed to toggle page");
+    }
+  };
+
+  const syncFacebookPages = async () => {
+    setSyncingPages(true);
+    try {
+      const res = await fetch("/api/facebook/pages");
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Failed to fetch pages");
+
+      const pagesFromFb: { id: string; name: string }[] = data.pages ?? [];
+      if (!pagesFromFb.length) {
+        toast.info(isThai ? "ไม่พบเพจใน Facebook" : "No pages found on Facebook");
+        return;
+      }
+
+      await Promise.all(
+        pagesFromFb.map((page) =>
+          fetch("/api/facebook-pages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pageId: page.id, name: page.name }),
+          }).catch(() => null)
+        )
+      );
+
+      await reloadFacebookPages();
+      toast.success(isThai ? "ดึงเพจจาก Facebook เรียบร้อย" : "Pages synced successfully");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to sync pages");
+    } finally {
+      setSyncingPages(false);
+    }
+  };
+
   const deleteAccount = async (id: string) => {
     await fetch("/api/manager-accounts", {
       method: "DELETE",
@@ -418,9 +493,35 @@ function SettingsContent() {
     { id: "account", label: isThai ? "บัญชี" : "Account", icon: User },
     { id: "connections", label: isThai ? "การเชื่อมต่อ" : "Connections", icon: Link2 },
     { id: "manager-accounts", label: isThai ? "บัญชีโฆษณา" : "Ad accounts", icon: Users },
+    { id: "facebook-pages", label: isThai ? "เพจเฟซบุ๊ก" : "Facebook Pages", icon: Globe },
     { id: "billing", label: isThai ? "การชำระเงิน" : "Billing", icon: CreditCard },
     { id: "preferences", label: isThai ? "การแสดงผล" : "Display", icon: Palette },
   ];
+
+  const billingPlans = [
+    {
+      name: "Pro",
+      price: "฿499",
+      features: isThai
+        ? ["ส่งออกไม่จำกัด", "10 บัญชีโฆษณา", "ส่งออกอัตโนมัติ", "Priority Support"]
+        : ["Unlimited exports", "10 ad accounts", "Automated exports", "Priority support"],
+      highlight: false,
+    },
+    {
+      name: "Business",
+      price: "฿1,299",
+      features: isThai
+        ? ["ทุกอย่างใน Pro", "ไม่จำกัดบัญชีโฆษณา", "API Access", "Dedicated Support"]
+        : ["Everything in Pro", "Unlimited ad accounts", "API access", "Dedicated support"],
+      highlight: true,
+    },
+  ];
+
+  const themeOptions = [
+    { id: "light", labelTh: "สว่าง", labelEn: "Light", icon: Sun },
+    { id: "dark", labelTh: "มืด", labelEn: "Dark", icon: Moon },
+    { id: "system", labelTh: "ตามระบบ", labelEn: "System", icon: Monitor },
+  ] as const;
 
   const filteredAccounts = useMemo(() => {
     if (!accountsSearch.trim()) return accounts;
@@ -451,640 +552,820 @@ function SettingsContent() {
 
   const getAccountStatusVariant = (acc: ManagerAccount): "success" | "secondary" | "destructive" => {
     const code = fbStatuses[acc.accountId] ?? fbStatuses[acc.id];
-    if (code === 1 || code === 9) return "success";
+    if (code === 1) return "success";
     if (code === 2 || code === 7 || code === 3) return "destructive";
+    // code 9 (In grace period) and others use secondary, but we'll tint it blue via className
     return "secondary";
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          {isThai ? "ตั้งค่า" : "Settings"}
-        </h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-          {isThai ? "จัดการบัญชีและการตั้งค่าทั้งหมด" : "Manage your account and all preferences."}
-        </p>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Sidebar */}
-        <div className="lg:w-52 shrink-0">
-          <Card className="p-1.5 shadow-sm overflow-hidden">
-            <nav className="space-y-1">
-              {tabs.map((t) => (
-                <button key={t.id} onClick={() => setActiveTab(t.id)}
-                  className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left cursor-pointer",
-                    activeTab === t.id ? "bg-primary/10 text-primary dark:bg-primary/30 dark:text-primary" : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
-                  )}>
-                  <t.icon className="w-4 h-4 shrink-0" />{t.label}
+    <div className="max-w-5xl mx-auto px-4 lg:px-0">
+      <Card className="shadow-sm min-h-[calc(100vh-8rem)] max-h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
+        <CardHeader className="pb-4 shrink-0">
+          <CardTitle className="text-2xl">
+            {isThai ? "ตั้งค่า" : "Settings"}
+          </CardTitle>
+          <CardDescription className="text-sm">
+            {isThai
+              ? "จัดการบัญชีและการตั้งค่าทั้งหมด"
+              : "Manage your account and all preferences."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4 flex-1 overflow-hidden">
+          <div className="flex h-full flex-col lg:flex-row gap-6 overflow-hidden">
+            {/* Sidebar (menu) */}
+            <div className="lg:w-52 shrink-0 lg:pr-4 lg:border-r lg:border-gray-200 dark:lg:border-gray-800">
+              <nav className="space-y-1">
+                {tabs.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setActiveTab(t.id)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left cursor-pointer",
+                      activeTab === t.id
+                        ? "bg-primary/10 text-primary dark:bg-primary/30 dark:text-primary"
+                        : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
+                    )}
+                  >
+                    <t.icon className="w-4 h-4 shrink-0" />
+                    {t.label}
+                  </button>
+                ))}
+                <Separator className="my-1 mx-2 bg-gray-100 dark:bg-gray-700" />
+                <button
+                  onClick={() => setActiveTab("delete")}
+                  className={cn(
+                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left cursor-pointer",
+                    activeTab === "delete"
+                      ? "bg-primary/5 text-primary dark:bg-primary/20 dark:text-primary"
+                      : "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                  )}
+                >
+                  <Trash2 className="w-4 h-4 shrink-0" />
+                  {isThai ? "ลบบัญชี" : "Delete Account"}
                 </button>
-              ))}
-              <Separator className="my-1 mx-2 bg-gray-100 dark:bg-gray-700" />
-              <button onClick={() => setActiveTab("delete")}
-                className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left cursor-pointer",
-                  activeTab === "delete" ? "bg-primary/5 text-primary dark:bg-primary/20 dark:text-primary" : "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                )}>
-                <Trash2 className="w-4 h-4 shrink-0" />{isThai ? "ลบบัญชี" : "Delete Account"}
-              </button>
-            </nav>
-          </Card>
-        </div>
+              </nav>
+            </div>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-
-          {/* Account */}
-          {activeTab === "account" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{isThai ? "ตั้งค่าบัญชี" : "Account settings"}</CardTitle>
-                <CardDescription>
-                  {isThai ? "ข้อมูลโปรไฟล์ของคุณ" : "Your profile information."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center gap-4">
-                  <Avatar className="w-16 h-16">
-                    <AvatarImage src={session?.user?.image ?? ""} />
-                    <AvatarFallback className="text-lg">{initials}</AvatarFallback>
-                  </Avatar>
+            {/* Content */}
+            <div className="flex-1 min-w-0 space-y-6 overflow-y-auto pr-1 pb-2 lg:pl-2">
+              {/* Account */}
+              {activeTab === "account" && (
+                <section className="space-y-6">
                   <div>
-                    <p className="font-semibold text-gray-900 dark:text-gray-100">{session?.user?.name}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">{session?.user?.email}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {isThai
-                        ? "รูปโปรไฟล์จากบัญชีที่เชื่อมต่อ"
-                        : "Profile picture comes from your connected account."}
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {isThai ? "ตั้งค่าบัญชี" : "Account settings"}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {isThai ? "ข้อมูลโปรไฟล์ของคุณ" : "Your profile information."}
                     </p>
                   </div>
-                </div>
-                <Separator />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label>ชื่อ</Label>
-                    <Input defaultValue={session?.user?.name ?? ""} />
+                  <div className="flex items-center gap-4">
+                    <Avatar className="w-16 h-16">
+                      <AvatarImage src={session?.user?.image ?? ""} />
+                      <AvatarFallback className="text-lg">{initials}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">
+                        {session?.user?.name}
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {session?.user?.email}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {isThai
+                          ? "รูปโปรไฟล์จากบัญชีที่เชื่อมต่อ"
+                          : "Profile picture comes from your connected account."}
+                      </p>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>อีเมล</Label>
-                    <Input defaultValue={session?.user?.email ?? ""} disabled className="opacity-60" />
+                  <Separator />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>ชื่อ</Label>
+                      <Input defaultValue={session?.user?.name ?? ""} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>อีเมล</Label>
+                      <Input
+                        defaultValue={session?.user?.email ?? ""}
+                        disabled
+                        className="opacity-60"
+                      />
+                    </div>
                   </div>
-                </div>
-                <Button onClick={() => toast.success(isThai ? "อัปเดตข้อมูลแล้ว" : "Profile updated")}>
-                  {isThai ? "บันทึก" : "Save"}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+                  <Button
+                    onClick={() =>
+                      toast.success(isThai ? "อัปเดตข้อมูลแล้ว" : "Profile updated")
+                    }
+                  >
+                    {isThai ? "บันทึก" : "Save"}
+                  </Button>
+                </section>
+              )}
 
-          {/* Connections */}
-          {activeTab === "connections" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{isThai ? "ตั้งค่าการเชื่อมต่อ" : "Connection settings"}</CardTitle>
-                <CardDescription>
-                  {isThai
-                    ? "จัดการบัญชี Google และ Facebook ที่เชื่อมต่อ"
-                    : "Manage your connected Google and Facebook accounts."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  {
-                    key: "google",
-                    label: "Google",
-                    desc: hasGoogle
-                      ? isThai
-                        ? "เชื่อมต่อแล้ว — ใช้สำหรับ Google Sheets"
-                        : "Connected — used for Google Sheets"
-                      : isThai
-                        ? "ยังไม่ได้เชื่อมต่อ"
-                        : "Not connected yet",
-                    connected: hasGoogle, icon: <GoogleIcon className="w-5 h-5" />, bg: "bg-gray-50 dark:bg-gray-700",
-                  },
-                  {
-                    key: "facebook",
-                    label: "Facebook",
-                    desc: hasFacebook
-                      ? isThai
-                        ? "เชื่อมต่อแล้ว — ใช้สำหรับดึงข้อมูลโฆษณา"
-                        : "Connected — used to fetch ad data"
-                      : isThai
-                        ? "ยังไม่ได้เชื่อมต่อ"
-                        : "Not connected yet",
-                    connected: hasFacebook, icon: <FacebookIcon className="w-5 h-5" />, bg: "bg-primary/10 dark:bg-primary/20",
-                  },
-                ].map((p) => (
-                  <div key={p.key} className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        "w-10 h-10 rounded-xl flex items-center justify-center",
-                        p.key === "facebook" ? "bg-blue-50 dark:bg-blue-900/10" : p.bg
-                      )}>{p.icon}</div>
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-gray-100">{p.label}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{p.desc}</p>
+              {/* Connections */}
+              {activeTab === "connections" && (
+                <section className="space-y-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {isThai ? "ตั้งค่าการเชื่อมต่อ" : "Connection settings"}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {isThai
+                        ? "จัดการบัญชี Google และ Facebook ที่เชื่อมต่อ"
+                        : "Manage your connected Google and Facebook accounts."}
+                    </p>
+                  </div>
+                  {[
+                    {
+                      key: "google",
+                      label: "Google",
+                      desc: hasGoogle
+                        ? isThai
+                          ? "เชื่อมต่อแล้ว — ใช้สำหรับ Google Sheets"
+                          : "Connected — used for Google Sheets"
+                        : isThai
+                          ? "ยังไม่ได้เชื่อมต่อ"
+                          : "Not connected yet",
+                      connected: hasGoogle, icon: <GoogleIcon className="w-5 h-5" />, bg: "bg-gray-50 dark:bg-gray-700",
+                    },
+                    {
+                      key: "facebook",
+                      label: "Facebook",
+                      desc: hasFacebook
+                        ? isThai
+                          ? "เชื่อมต่อแล้ว — ใช้สำหรับดึงข้อมูลโฆษณา"
+                          : "Connected — used to fetch ad data"
+                        : isThai
+                          ? "ยังไม่ได้เชื่อมต่อ"
+                          : "Not connected yet",
+                      connected: hasFacebook, icon: <FacebookIcon className="w-5 h-5" />, bg: "bg-primary/10 dark:bg-primary/20",
+                    },
+                  ].map((p) => (
+                    <div key={p.key} className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-10 h-10 rounded-xl flex items-center justify-center",
+                          p.key === "facebook" ? "bg-blue-50 dark:bg-blue-900/10" : p.bg
+                        )}>{p.icon}</div>
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{p.label}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{p.desc}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {p.connected
+                          ? (
+                            <div className="flex items-center gap-2">
+                              {p.key === "facebook" && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-8 px-3 text-xs"
+                                  onClick={() => signIn("facebook", { callbackUrl: "/settings?tab=connections" })}
+                                >
+                                  {isThai ? "เชื่อมต่ออีกครั้ง" : "Reconnect"}
+                                </Button>
+                              )}
+                              <Badge variant="success" className="gap-1">
+                                <CheckCircle2 className="w-3 h-3" />
+                                {isThai ? "เชื่อมต่อแล้ว" : "Connected"}
+                              </Badge>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => signIn(p.key, { callbackUrl: "/settings" })}
+                            >
+                              {isThai ? "เชื่อมต่อ" : "Connect"}
+                            </Button>
+                          )
+                        }
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {p.connected
-                        ? (
-                          <div className="flex items-center gap-2">
-                            {p.key === "facebook" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 px-3 text-xs"
-                                onClick={() => signIn("facebook", { callbackUrl: "/settings?tab=connections" })}
-                              >
-                                {isThai ? "เชื่อมต่ออีกครั้ง" : "Reconnect"}
-                              </Button>
-                            )}
-                            <Badge variant="success" className="gap-1">
-                              <CheckCircle2 className="w-3 h-3" />
-                              {isThai ? "เชื่อมต่อแล้ว" : "Connected"}
-                            </Badge>
-                          </div>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => signIn(p.key, { callbackUrl: "/settings" })}
-                          >
-                            {isThai ? "เชื่อมต่อ" : "Connect"}
-                          </Button>
-                        )
-                      }
+                  ))}
+                  <div className="p-3 bg-primary/10 dark:bg-primary/20 rounded-lg border border-primary/20 dark:border-primary/30">
+                    <div className="flex items-start gap-2">
+                      <Shield className="w-4 h-4 text-primary dark:text-primary mt-0.5 shrink-0" />
+                      <p className="text-xs text-primary dark:text-primary">
+                        {isThai
+                          ? "Token ถูกเก็บอย่างปลอดภัยในฐานข้อมูล ใช้เพื่อดึงข้อมูลโฆษณาและส่งออกเท่านั้น"
+                          : "Tokens are securely stored in the database and used only to fetch and export ad data."}
+                      </p>
                     </div>
                   </div>
-                ))}
-                <div className="p-3 bg-primary/10 dark:bg-primary/20 rounded-lg border border-primary/20 dark:border-primary/30">
-                  <div className="flex items-start gap-2">
-                    <Shield className="w-4 h-4 text-primary dark:text-primary mt-0.5 shrink-0" />
-                    <p className="text-xs text-primary dark:text-primary">
+                </section>
+              )}
+
+              {/* Manager Accounts */}
+              {activeTab === "manager-accounts" && (
+                <section className="space-y-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                       {isThai
-                        ? "Token ถูกเก็บอย่างปลอดภัยในฐานข้อมูล ใช้เพื่อดึงข้อมูลโฆษณาและส่งออกเท่านั้น"
-                        : "Tokens are securely stored in the database and used only to fetch and export ad data."}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Manager Accounts */}
-          {activeTab === "manager-accounts" && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between gap-4">
-                <div>
-                  <CardTitle>
-                    {isThai ? "บัญชีโฆษณา (Manager Accounts)" : "Ad accounts (Manager Accounts)"}
-                  </CardTitle>
-                  <CardDescription>
-                    {isThai
-                      ? "เลือกบัญชีโฆษณา Facebook ที่ต้องการใช้ในระบบ"
-                      : "Select which Facebook ad accounts to use in the system."}
-                  </CardDescription>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Toolbar: search + actions */}
-                <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
-                  <div className="w-full sm:max-w-xs">
-                    <Input
-                      placeholder={isThai ? "ค้นหาตามชื่อหรือ Account ID..." : "Search by name or Account ID..."}
-                      value={accountsSearch}
-                      onChange={(e) => setAccountsSearch(e.target.value)}
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 px-3 text-xs"
-                      onClick={reloadManagerAccounts}
-                    >
-                      <Loader2 className="w-3 h-3 mr-1" />
-                      {isThai ? "รีเฟรช" : "Refresh"}
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="h-8 px-3 text-xs gap-1.5"
-                      onClick={syncManagerAccountsFromFacebook}
-                      disabled={syncingFbAccounts}
-                    >
-                      {syncingFbAccounts ? (
-                        <>
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          {isThai ? "กำลังดึง..." : "Syncing..."}
-                        </>
-                      ) : (
-                        <>
-                          <FacebookIcon className="w-3.5 h-3.5" />
-                          {isThai ? "ดึงจาก Facebook" : "Sync from Facebook"}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {accountsLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
-                  </div>
-                ) : filteredAccounts.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Users className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                        ? "บัญชีโฆษณา (Manager Accounts)"
+                        : "Ad accounts (Manager Accounts)"}
+                    </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {accountsSearch.trim()
-                        ? isThai
-                          ? "ไม่พบบัญชีที่ตรงกับคำค้นหา"
-                          : "No accounts match your search."
-                        : isThai
-                          ? "ยังไม่มีบัญชีโฆษณา"
-                          : "No ad accounts yet."}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
                       {isThai
-                        ? "กดปุ่ม “ดึงจาก Facebook” เพื่อโหลดบัญชีโฆษณา"
-                        : "Click “Sync from Facebook” to load ad accounts."}
+                        ? "เลือกบัญชีโฆษณา Facebook ที่ต้องการใช้ในระบบ"
+                        : "Select which Facebook ad accounts to use in the system."}
                     </p>
                   </div>
-                ) : (
-                  <>
+                  {/* Toolbar: search + actions */}
+                  <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+                    <div className="w-full sm:max-w-xs">
+                      <Input
+                        placeholder={isThai ? "ค้นหาตามชื่อหรือ Account ID..." : "Search by name or Account ID..."}
+                        value={accountsSearch}
+                        onChange={(e) => setAccountsSearch(e.target.value)}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs"
+                        onClick={reloadManagerAccounts}
+                        disabled={accountsLoading}
+                      >
+                        <Loader2
+                          className={cn(
+                            "w-3 h-3 mr-1 text-gray-500",
+                            accountsLoading && "animate-spin"
+                          )}
+                        />
+                        {isThai ? "รีเฟรช" : "Refresh"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs gap-1.5 bg-white text-[#1877F2] border-blue-200 hover:bg-blue-50 dark:bg-transparent dark:text-[#9ec5ff] dark:border-blue-800 dark:hover:bg-blue-950/40"
+                        onClick={syncManagerAccountsFromFacebook}
+                        disabled={syncingFbAccounts}
+                      >
+                        {syncingFbAccounts ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            {isThai ? "กำลังดึง..." : "Syncing..."}
+                          </>
+                        ) : (
+                          <>
+                            <span className="w-5 h-5 rounded-full border border-white/60 dark:border-gray-700/80 bg-white/60 dark:bg-gray-900/60 flex items-center justify-center">
+                              <FacebookIcon className="w-3.5 h-3.5 text-[#1877F2]" />
+                            </span>
+                            {isThai ? "ดึงจาก Facebook" : "Sync from Facebook"}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {accountsLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                    </div>
+                  ) : filteredAccounts.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Users className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {accountsSearch.trim()
+                          ? isThai
+                            ? "ไม่พบบัญชีที่ตรงกับคำค้นหา"
+                            : "No accounts match your search."
+                          : isThai
+                            ? "ยังไม่มีบัญชีโฆษณา"
+                            : "No ad accounts yet."}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {isThai
+                          ? "กดปุ่ม “ดึงจาก Facebook” เพื่อโหลดบัญชีโฆษณา"
+                          : "Click “Sync from Facebook” to load ad accounts."}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 dark:bg-gray-800/60">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                {isThai ? "บัญชี" : "Account"}
+                              </th>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                {isThai ? "บัญชีโฆษณา" : "Account ID"}
+                              </th>
+                              <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                {isThai ? "สถานะ" : "Status"}
+                              </th>
+                              <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                {isThai ? "การใช้งาน" : "Active"}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredAccounts
+                              .slice(
+                                (accountsPage - 1) * ACCOUNTS_PER_PAGE,
+                                accountsPage * ACCOUNTS_PER_PAGE
+                              )
+                              .map((acc) => (
+                                <tr
+                                  key={acc.id}
+                                  className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
+                                >
+                                  <td className="px-4 py-1.5">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-7 h-7 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+                                        <FacebookIcon className="w-4 h-4 text-[#1877F2]" />
+                                      </div>
+                                      <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                                        {acc.name}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-1.5">
+                                    <span className="text-xs font-mono text-gray-600 dark:text-gray-300">
+                                      {acc.accountId}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-1.5 text-center">
+                                    <Badge
+                                      variant={getAccountStatusVariant(acc)}
+                                      className={cn(
+                                        "text-xs px-3 py-0.5",
+                                        (fbStatuses[acc.accountId] ?? fbStatuses[acc.id]) === 9 &&
+                                        "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+                                      )}
+                                    >
+                                      {getAccountStatusLabel(acc)}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-1.5 text-center">
+                                    <Switch
+                                      className="scale-75 data-[state=checked]:bg-green-500"
+                                      checked={acc.isActive}
+                                      onCheckedChange={() => toggleAccount(acc)}
+                                    />
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {filteredAccounts.length > ACCOUNTS_PER_PAGE && (
+                        <div className="flex items-center justify-between pt-3">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {isThai ? "แสดง" : "Showing"}{" "}
+                            {(accountsPage - 1) * ACCOUNTS_PER_PAGE + 1}–
+                            {Math.min(accountsPage * ACCOUNTS_PER_PAGE, filteredAccounts.length)}{" "}
+                            {isThai ? "จาก" : "of"} {filteredAccounts.length}{" "}
+                            {isThai ? "บัญชี" : "accounts"}
+                          </p>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              disabled={accountsPage === 1}
+                              onClick={() => setAccountsPage((p) => Math.max(1, p - 1))}
+                            >
+                              {isThai ? "ก่อนหน้า" : "Previous"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              disabled={accountsPage * ACCOUNTS_PER_PAGE >= filteredAccounts.length}
+                              onClick={() =>
+                                setAccountsPage((p) =>
+                                  p * ACCOUNTS_PER_PAGE >= filteredAccounts.length ? p : p + 1
+                                )
+                              }
+                            >
+                              {isThai ? "ถัดไป" : "Next"}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
+              )}
+
+              {/* Billing */}
+              {activeTab === "billing" && (
+                <section className="space-y-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {isThai ? "ตั้งค่าการชำระเงิน" : "Billing settings"}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {isThai ? "จัดการแผนบริการ" : "Manage your subscription plan."}
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-gradient-to-r from-primary to-indigo-600 text-white">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm opacity-80">
+                          {isThai ? "แผนปัจจุบัน" : "Current plan"}
+                        </p>
+                        <p className="text-xl font-bold mt-0.5">
+                          {isThai ? "ฟรี" : "Free"}
+                        </p>
+                        <p className="text-sm opacity-80 mt-1">
+                          {isThai
+                            ? "ส่งออกได้ 100 แถว/เดือน"
+                            : "Export up to 100 rows per month"}
+                        </p>
+                      </div>
+                      <CreditCard className="w-10 h-10 opacity-40" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {billingPlans.map((plan) => (
+                      <div
+                        key={plan.name}
+                        className={cn(
+                          "p-4 rounded-xl border-2 space-y-3",
+                          plan.highlight
+                            ? "border-primary bg-primary/10 dark:bg-primary/10"
+                            : "border-gray-200 dark:border-gray-700"
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-900 dark:text-gray-100">
+                              {plan.name}
+                            </span>
+                            {plan.highlight && (
+                              <Badge className="text-xs">
+                                {isThai ? "แนะนำ" : "Recommended"}
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                            {plan.price}
+                            <span className="text-sm font-normal text-gray-500">
+                              {isThai ? "/เดือน" : "/month"}
+                            </span>
+                          </span>
+                        </div>
+                        <ul className="space-y-1.5 text-sm text-gray-600 dark:text-gray-400">
+                          {plan.features.map((f) => (
+                            <li key={f} className="flex items-center gap-2">
+                              <Check className="w-3.5 h-3.5 text-green-500" />
+                              {f}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Facebook Pages */}
+              {activeTab === "facebook-pages" && (
+                <section className="space-y-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {isThai
+                        ? "เพจเฟซบุ๊ก (Facebook Pages)"
+                        : "Facebook Pages"}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {isThai
+                        ? "เลือกเพจ Facebook ที่จะนำมาดึง Engagement สร้าง Audience"
+                        : "Select which Facebook pages to use for Custom Audiences."}
+                    </p>
+                  </div>
+                  {/* Toolbar */}
+                  <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+                    <div className="w-full sm:max-w-xs">
+                      <Input
+                        placeholder={isThai ? "ค้นหาชื่อเพจ หรือ Page ID..." : "Search by name or Page ID..."}
+                        value={pagesSearch}
+                        onChange={(e) => setPagesSearch(e.target.value)}
+                        className="h-9 text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs"
+                        onClick={reloadFacebookPages}
+                        disabled={pagesLoading}
+                      >
+                        <Loader2 className={cn("w-3 h-3 mr-1 text-gray-500", pagesLoading && "animate-spin")} />
+                        {isThai ? "รีเฟรช" : "Refresh"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs gap-1.5 bg-white text-[#1877F2] border-blue-200 hover:bg-blue-50 dark:bg-transparent dark:text-[#9ec5ff] dark:border-blue-800 dark:hover:bg-blue-950/40"
+                        onClick={syncFacebookPages}
+                        disabled={syncingPages}
+                      >
+                        {syncingPages ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            {isThai ? "กำลังดึง..." : "Syncing..."}
+                          </>
+                        ) : (
+                          <>
+                            <span className="w-5 h-5 rounded-full border border-white/60 dark:border-gray-700/80 bg-white/60 dark:bg-gray-900/60 flex items-center justify-center">
+                              <FacebookIcon className="w-3.5 h-3.5 text-[#1877F2]" />
+                            </span>
+                            {isThai ? "ดึงเพจจาก Facebook" : "Sync Pages"}
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {pagesLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                    </div>
+                  ) : fbPages.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Globe className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {isThai ? "ยังไม่มีเพจในระบบ" : "No pages yet."}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {isThai ? "กดปุ่ม “ดึงเพจจาก Facebook” เพื่อโหลด" : "Click “Sync Pages” to load pages."}
+                      </p>
+                    </div>
+                  ) : (
                     <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-xl">
                       <table className="w-full text-sm">
                         <thead className="bg-gray-50 dark:bg-gray-800/60">
                           <tr>
                             <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                              {isThai ? "บัญชี" : "Account"}
+                              {isThai ? "ชื่อเพจ" : "Page Name"}
                             </th>
                             <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                              {isThai ? "บัญชีโฆษณา" : "Account ID"}
+                              {isThai ? "เพจ ID" : "Page ID"}
                             </th>
                             <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                              {isThai ? "สถานะ" : "Status"}
-                            </th>
-                            <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                              {isThai ? "การใช้งาน" : "Active"}
+                              {isThai ? "การใช้งานร่วมกับระบบแอด" : "Active for Audiences"}
                             </th>
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredAccounts
-                            .slice(
-                              (accountsPage - 1) * ACCOUNTS_PER_PAGE,
-                              accountsPage * ACCOUNTS_PER_PAGE
-                            )
-                            .map((acc) => (
+                          {fbPages
+                            .filter(p => p.name.toLowerCase().includes(pagesSearch.toLowerCase()) || p.pageId.includes(pagesSearch))
+                            .map((page) => (
                               <tr
-                                key={acc.id}
-                                className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
+                                key={page.id}
+                                className="border-b border-gray-200 dark:border-gray-700 last:border-b-0"
                               >
-                                <td className="px-4 py-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-7 h-7 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
-                                      <FacebookIcon className="w-4 h-4 text-[#1877F2]" />
-                                    </div>
-                                    <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
-                                      {acc.name}
-                                    </span>
-                                  </div>
+                                <td className="px-4 py-1.5 font-medium text-gray-900 dark:text-gray-100">
+                                  {page.name}
                                 </td>
-                                <td className="px-4 py-1.5">
-                                  <span className="text-xs font-mono text-gray-600 dark:text-gray-300">
-                                    {acc.accountId}
-                                  </span>
+                                <td className="px-4 py-1.5 text-gray-600 dark:text-gray-400">
+                                  {page.id}
                                 </td>
                                 <td className="px-4 py-1.5 text-center">
-                                  <Badge
-                                    variant={getAccountStatusVariant(acc)}
-                                    className="text-xs px-3 py-0.5"
-                                  >
-                                    {getAccountStatusLabel(acc)}
-                                  </Badge>
-                                </td>
-                                <td className="px-4 py-1.5 text-center">
-                                  <Switch
-                                    className="scale-75"
-                                    checked={acc.isActive}
-                                    onCheckedChange={() => toggleAccount(acc)}
-                                  />
+                                  <Switch className="scale-75 data-[state=checked]:bg-green-500" checked={page.isActive} onCheckedChange={() => toggleFacebookPage(page)} />
                                 </td>
                               </tr>
                             ))}
                         </tbody>
                       </table>
                     </div>
-                    {filteredAccounts.length > ACCOUNTS_PER_PAGE && (
-                      <div className="flex items-center justify-between pt-3">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {isThai ? "แสดง" : "Showing"}{" "}
-                          {(accountsPage - 1) * ACCOUNTS_PER_PAGE + 1}–
-                          {Math.min(accountsPage * ACCOUNTS_PER_PAGE, filteredAccounts.length)}{" "}
-                          {isThai ? "จาก" : "of"} {filteredAccounts.length}{" "}
-                          {isThai ? "บัญชี" : "accounts"}
-                        </p>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            disabled={accountsPage === 1}
-                            onClick={() => setAccountsPage((p) => Math.max(1, p - 1))}
-                          >
-                            {isThai ? "ก่อนหน้า" : "Previous"}
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            disabled={accountsPage * ACCOUNTS_PER_PAGE >= filteredAccounts.length}
-                            onClick={() =>
-                              setAccountsPage((p) =>
-                                p * ACCOUNTS_PER_PAGE >= filteredAccounts.length ? p : p + 1
-                              )
-                            }
-                          >
-                            {isThai ? "ถัดไป" : "Next"}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Billing */}
-          {activeTab === "billing" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{isThai ? "ตั้งค่าการชำระเงิน" : "Billing settings"}</CardTitle>
-                <CardDescription>
-                  {isThai ? "จัดการแผนบริการ" : "Manage your subscription plan."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="p-4 rounded-xl bg-gradient-to-r from-primary to-indigo-600 text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm opacity-80">
-                        {isThai ? "แผนปัจจุบัน" : "Current plan"}
-                      </p>
-                      <p className="text-xl font-bold mt-0.5">
-                        {isThai ? "ฟรี" : "Free"}
-                      </p>
-                      <p className="text-sm opacity-80 mt-1">
-                        {isThai ? "ส่งออกได้ 100 แถว/เดือน" : "Export up to 100 rows per month"}
-                      </p>
-                    </div>
-                    <CreditCard className="w-10 h-10 opacity-40" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[
-                    {
-                      name: "Pro",
-                      price: "฿499",
-                      features: isThai
-                        ? ["ส่งออกไม่จำกัด", "10 บัญชีโฆษณา", "ส่งออกอัตโนมัติ", "Priority Support"]
-                        : ["Unlimited exports", "10 ad accounts", "Automated exports", "Priority support"],
-                      highlight: false,
-                    },
-                    {
-                      name: "Business",
-                      price: "฿1,299",
-                      features: isThai
-                        ? ["ทุกอย่างใน Pro", "ไม่จำกัดบัญชีโฆษณา", "API Access", "Dedicated Support"]
-                        : ["Everything in Pro", "Unlimited ad accounts", "API access", "Dedicated support"],
-                      highlight: true,
-                    },
-                  ].map((plan) => (
-                    <div key={plan.name} className={cn("p-4 rounded-xl border-2 space-y-3", plan.highlight ? "border-primary bg-primary/10 dark:bg-primary/10" : "border-gray-200 dark:border-gray-700")}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900 dark:text-gray-100">{plan.name}</span>
-                          {plan.highlight && (
-                            <Badge className="text-xs">
-                              {isThai ? "แนะนำ" : "Recommended"}
-                            </Badge>
-                          )}
-                        </div>
-                        <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                          {plan.price}
-                          <span className="text-sm font-normal text-gray-500">
-                            {isThai ? "/เดือน" : "/month"}
-                          </span>
-                        </span>
-                      </div>
-                      <ul className="space-y-1.5 text-sm text-gray-600 dark:text-gray-400">
-                        {plan.features.map((f) => (
-                          <li key={f} className="flex items-center gap-2">
-                            <Check className="w-3.5 h-3.5 text-green-500" />
-                            {f}
-                          </li>
-                        ))}
-                      </ul>
-                      <Button className="w-full" size="sm">
-                        {isThai ? "อัปเกรด" : "Upgrade"}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Preferences */}
-          {activeTab === "preferences" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  {isThai ? "การแสดงผลและภาษา" : "Display & language"}
-                </CardTitle>
-                <CardDescription>
-                  {isThai ? "ปรับธีม สี ภาษา และไทม์โซน" : "Adjust theme, accent color, language and timezone."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-3">
-                  <Label>{isThai ? "ธีม" : "Theme"}</Label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {(
-                      [
-                        { id: "light", labelTh: "สว่าง", labelEn: "Light", icon: Sun },
-                        { id: "dark", labelTh: "มืด", labelEn: "Dark", icon: Moon },
-                        { id: "system", labelTh: "ตามระบบ", labelEn: "System", icon: Monitor },
-                      ] as const
-                    ).map((t) => (
-                      <button key={t.id} disabled={prefsSaving} onClick={() => handlePreferenceChange("theme", t.id)}
-                        className={cn("flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-colors",
-                          theme === t.id ? "border-primary bg-primary/5 dark:bg-primary/20" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
-                        )}>
-                        <t.icon
-                          className={cn("w-5 h-5", theme === t.id ? "text-primary" : "text-gray-500")}
-                        />
-                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                          {isThai ? t.labelTh : t.labelEn}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <Label>{isThai ? "สีธีมหลัก" : "Accent color"}</Label>
-                  <div className="flex gap-2 flex-wrap pt-2">
-                    {ACCENT_COLORS.map((c) => (
-                      <button key={c.id} disabled={prefsSaving} onClick={() => handlePreferenceChange("accentColor", c.id)} title={c.label}
-                        className={cn("w-8 h-8 rounded-full relative transition-all", c.cls, accentColor === c.id && "ring-2 ring-offset-2 ring-gray-400 dark:ring-gray-500 shadow-lg scale-110")}>
-                        {accentColor === c.id && <Check className="w-4 h-4 text-white absolute inset-0 m-auto" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5 flex flex-col justify-end">
-                    <Label className="flex items-center gap-1.5">
-                      <Globe className="w-3.5 h-3.5" />
-                      {isThai ? "ภาษา" : "Language"}
-                    </Label>
-                    <Select value={language} disabled={prefsSaving} onValueChange={(val) => handlePreferenceChange("language", val)}>
-                      <SelectTrigger className="w-full bg-white dark:bg-gray-800">
-                        <SelectValue placeholder="Select Language" />
-                      </SelectTrigger>
-                      <SelectContent position="popper" side="bottom" className="max-h-[300px]">
-                        <SelectItem value="th">
-                          <div className="flex items-center gap-2">
-                            <img src="https://flagcdn.com/w20/th.png" srcSet="https://flagcdn.com/w40/th.png 2x" width="20" alt="TH" className="rounded-sm" />
-                            ภาษาไทย
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="en">
-                          <div className="flex items-center gap-2">
-                            <img src="https://flagcdn.com/w20/us.png" srcSet="https://flagcdn.com/w40/us.png 2x" width="20" alt="US" className="rounded-sm" />
-                            English
-                          </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5 flex flex-col justify-end">
-                    <Label className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" />
-                      {isThai ? "ไทม์โซน" : "Timezone"}
-                    </Label>
-                    <Select value={timezone} disabled={prefsSaving} onValueChange={(val) => handlePreferenceChange("timezone", val)}>
-                      <SelectTrigger className="w-full bg-white dark:bg-gray-800">
-                        <SelectValue placeholder="Select Timezone" />
-                      </SelectTrigger>
-                      <SelectContent position="popper" side="bottom" className="max-h-[300px]">
-                        {Intl.supportedValuesOf('timeZone').map(tz => (
-                          <SelectItem key={tz} value={tz}>
-                            {getTimezoneLabel(tz)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Delete */}
-          {activeTab === "delete" && (
-            <Card className="border-red-200 dark:border-red-800">
-              <CardHeader>
-                <CardTitle className="text-red-600 dark:text-red-400">
-                  {isThai ? "ลบบัญชี" : "Delete account"}
-                </CardTitle>
-                <CardDescription>
-                  {isThai
-                    ? "การดำเนินการนี้ไม่สามารถย้อนกลับได้"
-                    : "This action cannot be undone."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-                    <ul className="text-xs text-red-600 dark:text-red-400 space-y-1">
-                      {isThai ? (
-                        <>
-                          <li>• ข้อมูลทั้งหมดจะถูกลบถาวร</li>
-                          <li>• การตั้งค่าการส่งออกทั้งหมดจะหายไป</li>
-                          <li>• ประวัติการส่งออกจะหายไป</li>
-                          <li>• การเชื่อมต่อ Google และ Facebook จะถูกยกเลิก</li>
-                        </>
-                      ) : (
-                        <>
-                          <li>• All of your data will be permanently deleted.</li>
-                          <li>• All export settings will be lost.</li>
-                          <li>• Export history will be removed.</li>
-                          <li>• Google and Facebook connections will be revoked.</li>
-                        </>
-                      )}
-                    </ul>
-                  </div>
-                </div>
-                <Button
-                  variant="destructive"
-                  onClick={() => setShowDeleteDialog(true)}
-                  className="gap-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  {isThai ? "ลบบัญชีทั้งหมด" : "Delete entire account"}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
-
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-red-600">
-              {isThai ? "ยืนยันการลบบัญชี" : "Confirm account deletion"}
-            </DialogTitle>
-            <DialogDescription>
-              {isThai ? (
-                <>
-                  พิมพ์{" "}
-                  <strong className="text-gray-900 dark:text-gray-100">ลบบัญชี</strong>{" "}
-                  เพื่อยืนยัน
-                </>
-              ) : (
-                "Type ลบบัญชี to confirm."
+                  )}
+                </section>
               )}
-            </DialogDescription>
-          </DialogHeader>
-          <Input
-            placeholder={
-              isThai ? "พิมพ์ 'ลบบัญชี' เพื่อยืนยัน" : "Type 'ลบบัญชี' to confirm"
-            }
-            value={deleteConfirm}
-            onChange={(e) => setDeleteConfirm(e.target.value)}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-              {isThai ? "ยกเลิก" : "Cancel"}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteUser}
-              disabled={deleteConfirm !== "ลบบัญชี"}
-            >
-              {isThai ? "ลบบัญชีถาวร" : "Delete permanently"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+
+              {/* Preferences */}
+              {activeTab === "preferences" && (
+                <section className="space-y-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {isThai ? "การแสดงผลและภาษา" : "Display & language"}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {isThai
+                        ? "ปรับธีม สี ภาษา และไทม์โซน"
+                        : "Adjust theme, accent color, language and timezone."}
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <Label>{isThai ? "ธีม" : "Theme"}</Label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {themeOptions.map((t) => (
+                        <button
+                          key={t.id}
+                          disabled={prefsSaving}
+                          onClick={() => handlePreferenceChange("theme", t.id)}
+                          className={cn(
+                            "flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-colors",
+                            theme === t.id
+                              ? "border-primary bg-primary/5 dark:bg-primary/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
+                          )}
+                        >
+                          <t.icon
+                            className={cn(
+                              "w-5 h-5",
+                              theme === t.id ? "text-primary" : "text-gray-500"
+                            )}
+                          />
+                          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                            {isThai ? t.labelTh : t.labelEn}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <Label>{isThai ? "สีธีมหลัก" : "Accent color"}</Label>
+                    <div className="flex gap-2 flex-wrap pt-2">
+                      {ACCENT_COLORS.map((c) => (
+                        <button key={c.id} disabled={prefsSaving} onClick={() => handlePreferenceChange("accentColor", c.id)} title={c.label}
+                          className={cn("w-8 h-8 rounded-full relative transition-all", c.cls, accentColor === c.id && "ring-2 ring-offset-2 ring-gray-400 dark:ring-gray-500 shadow-lg scale-110")}>
+                          {accentColor === c.id && <Check className="w-4 h-4 text-white absolute inset-0 m-auto" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5 flex flex-col justify-end">
+                      <Label className="flex items-center gap-1.5">
+                        <Globe className="w-3.5 h-3.5" />
+                        {isThai ? "ภาษา" : "Language"}
+                      </Label>
+                      <Select
+                        value={language}
+                        disabled={prefsSaving}
+                        onValueChange={(val) => handlePreferenceChange("language", val)}
+                      >
+                        <SelectTrigger className="w-full bg-white dark:bg-gray-800">
+                          <SelectValue placeholder="Select Language" />
+                        </SelectTrigger>
+                        <SelectContent
+                          position="popper"
+                          side="bottom"
+                          className="max-h-[300px]"
+                        >
+                          <SelectItem value="th">
+                            <div className="flex items-center gap-2">
+                              <img
+                                src="https://flagcdn.com/w20/th.png"
+                                srcSet="https://flagcdn.com/w40/th.png 2x"
+                                width="20"
+                                alt="TH"
+                                className="rounded-sm"
+                              />
+                              ภาษาไทย
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="en">
+                            <div className="flex items-center gap-2">
+                              <img
+                                src="https://flagcdn.com/w20/us.png"
+                                srcSet="https://flagcdn.com/w40/us.png 2x"
+                                width="20"
+                                alt="US"
+                                className="rounded-sm"
+                              />
+                              English
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5 flex flex-col justify-end">
+                      <Label className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" />
+                        {isThai ? "ไทม์โซน" : "Timezone"}
+                      </Label>
+                      <Select
+                        value={timezone}
+                        disabled={prefsSaving}
+                        onValueChange={(val) => handlePreferenceChange("timezone", val)}
+                      >
+                        <SelectTrigger className="w-full bg-white dark:bg-gray-800">
+                          <SelectValue placeholder="Select Timezone" />
+                        </SelectTrigger>
+                        <SelectContent
+                          position="popper"
+                          side="bottom"
+                          className="max-h-[300px]"
+                        >
+                          {Intl.supportedValuesOf("timeZone").map((tz) => (
+                            <SelectItem key={tz} value={tz}>
+                              {getTimezoneLabel(tz)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </section>
+              )
+              }
+
+              {/* Delete */}
+              {
+                activeTab === "delete" && (
+                  <section className="space-y-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-red-600 dark:text-red-400">
+                        {isThai ? "ลบบัญชี" : "Delete account"}
+                      </h2>
+                      <p className="text-sm text-red-500 dark:text-red-300">
+                        {isThai
+                          ? "การดำเนินการนี้ไม่สามารถย้อนกลับได้"
+                          : "This action cannot be undone."}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                        <ul className="text-xs text-red-600 dark:text-red-400 space-y-1">
+                          {isThai ? (
+                            <>
+                              <li>• ข้อมูลทั้งหมดจะถูกลบถาวร</li>
+                              <li>• การตั้งค่าการส่งออกทั้งหมดจะหายไป</li>
+                              <li>• ประวัติการส่งออกจะหายไป</li>
+                              <li>• การเชื่อมต่อ Google และ Facebook จะถูกยกเลิก</li>
+                            </>
+                          ) : (
+                            <>
+                              <li>• All of your data will be permanently deleted.</li>
+                              <li>• All export settings will be lost.</li>
+                              <li>• Export history will be removed.</li>
+                              <li>• Google and Facebook connections will be revoked.</li>
+                            </>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      onClick={() => setShowDeleteDialog(true)}
+                      className="gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      {isThai ? "ลบบัญชีทั้งหมด" : "Delete entire account"}
+                    </Button>
+                  </section>
+                )}
+            </div>
+          </div>
+        </CardContent>
+
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="text-red-600">
+                {isThai ? "ยืนยันการลบบัญชี" : "Confirm account deletion"}
+              </DialogTitle>
+              <DialogDescription>
+                {isThai ? (
+                  <>
+                    พิมพ์{" "}
+                    <strong className="text-gray-900 dark:text-gray-100">
+                      ลบบัญชี
+                    </strong>{" "}
+                    เพื่อยืนยัน
+                  </>
+                ) : (
+                  "Type ลบบัญชี to confirm."
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <Input
+              placeholder={
+                isThai ? "พิมพ์ 'ลบบัญชี' เพื่อยืนยัน" : "Type 'ลบบัญชี' to confirm"
+              }
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                {isThai ? "ยกเลิก" : "Cancel"}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteUser}
+                disabled={deleteConfirm !== "ลบบัญชี"}
+              >
+                {isThai ? "ลบบัญชีถาวร" : "Delete permanently"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </Card>
+    </div >
   );
 }
 

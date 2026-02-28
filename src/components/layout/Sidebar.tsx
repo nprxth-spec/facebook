@@ -10,6 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  BarChart3,
+  Wrench,
 } from "lucide-react";
 import React from "react";
 import { useTheme } from "@/components/providers/ThemeProvider";
@@ -24,6 +26,16 @@ const navItems = [
     key: "export",
     href: "/export",
     icon: FileSpreadsheet,
+  },
+  {
+    key: "ads",
+    href: "/ads",
+    icon: BarChart3,
+  },
+  {
+    key: "tools",
+    href: "/tools",
+    icon: Wrench,
   },
   {
     key: "settings",
@@ -87,7 +99,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     title={collapsed ? t(`sidebar.${item.key}`) : undefined}
                   >
                     <item.icon className={cn("shrink-0", collapsed ? "w-5 h-5" : "w-5 h-5")} />
-                    {!collapsed && <span>{t(`sidebar.${item.key}`)}</span>}
+                    {!collapsed && <span>{t(`sidebar.${item.key}`) || (item.key === 'tools' ? 'เครื่องมือ' : item.key)}</span>}
                   </Link>
                 </li>
               );

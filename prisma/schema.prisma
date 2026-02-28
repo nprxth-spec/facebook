@@ -20,7 +20,9 @@ model User {
   exportConfigs     ExportConfig[]
   exportLogs        ExportLog[]
   managerAccounts   ManagerAccount[]
+  facebookPages     FacebookPage[]
   preferences       UserPreferences?
+  interestPresets   InterestAudiencePreset[]
 }
 
 model Account {
@@ -68,6 +70,21 @@ model ManagerAccount {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
+}
+
+model FacebookPage {
+  id        String   @id @default(cuid())
+  userId    String
+  pageId    String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
 }
 
 model ExportConfig {
@@ -108,6 +125,9 @@ model ExportLog {
 
   user   User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   config ExportConfig? @relation(fields: [configId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([userId, status])
 }
 
 model UserPreferences {
@@ -121,4 +141,18 @@ model UserPreferences {
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model InterestAudiencePreset {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?  @db.Text
+  interests   Json     // เก็บ Array ของ { id: string, name: string }
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
 }
