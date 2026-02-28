@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getFacebookToken } from "@/lib/tokens";
+import { prisma } from "@/lib/db";
 import { runWithConcurrency } from "@/lib/concurrency";
 
 const FB_API = "https://graph.facebook.com/v22.0";
+const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * Fetch all pages the user has access to via Facebook Graph API.
- * Requires `pages_show_list` or `pages_read_engagement` permission.
+ * Includes server-side rate limiting (10-min cooldown per user via DB timestamp).
  */
 export async function GET() {
     try {
@@ -16,12 +18,32 @@ export async function GET() {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const accessToken = await getFacebookToken(session.user.id);
+        const userId = session.user.id;
+
+        // ── Server-side rate limiting ──────────────────────────────────────────
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { lastFbPagesSyncAt: true },
+        });
+
+        if (user?.lastFbPagesSyncAt) {
+            const elapsed = Date.now() - user.lastFbPagesSyncAt.getTime();
+            if (elapsed < SYNC_COOLDOWN_MS) {
+                const secondsLeft = Math.ceil((SYNC_COOLDOWN_MS - elapsed) / 1000);
+                return NextResponse.json(
+                    { error: `rate_limited`, secondsLeft },
+                    { status: 429 }
+                );
+            }
+        }
+        // ──────────────────────────────────────────────────────────────────────
+
+        const accessToken = await getFacebookToken(userId);
         if (!accessToken) {
             return NextResponse.json({ error: "No Facebook access token found" }, { status: 400 });
         }
 
-        // Fetch pages (accounts) the user manages — include username and access_token
+        // Fetch pages the user manages
         const url = `${FB_API}/me/accounts?fields=id,name,category,access_token,username&limit=100&access_token=${accessToken}`;
         const res = await fetch(url);
         const data = await res.json();
@@ -42,8 +64,7 @@ export async function GET() {
             username?: string;
         }> = data.data || [];
 
-        // Fetch is_published + picture URL using page access tokens
-        // Limit to 5 concurrent calls to avoid flooding Facebook API
+        // Fetch is_published + picture URL — max 5 concurrent calls
         const pages = await runWithConcurrency(rawPages, 5, async (p) => {
             let pageStatus: string | null = null;
             let pictureUrl: string | null = null;
@@ -53,14 +74,13 @@ export async function GET() {
                     const detailRes = await fetch(
                         `${FB_API}/${p.id}?fields=is_published,picture.type(square){url}&access_token=${p.access_token}`
                     );
-                    const detailData = await detailRes.json();
-
-                    if (typeof detailData.is_published === "boolean") {
-                        pageStatus = detailData.is_published ? "PUBLISHED" : "UNPUBLISHED";
+                    const detail = await detailRes.json();
+                    if (typeof detail.is_published === "boolean") {
+                        pageStatus = detail.is_published ? "PUBLISHED" : "UNPUBLISHED";
                     }
-                    pictureUrl = detailData.picture?.data?.url ?? null;
+                    pictureUrl = detail.picture?.data?.url ?? null;
                 } catch {
-                    // ignore — page gets null status/picture
+                    // ignore
                 }
             }
 
@@ -73,6 +93,12 @@ export async function GET() {
                 pictureUrl,
                 hasToken: !!p.access_token,
             };
+        });
+
+        // Update server-side rate limit timestamp
+        await prisma.user.update({
+            where: { id: userId },
+            data: { lastFbPagesSyncAt: new Date() },
         });
 
         return NextResponse.json({ pages });

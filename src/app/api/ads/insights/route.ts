@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getFacebookToken } from "@/lib/tokens";
 import { NextResponse } from "next/server";
+import { cacheGet, cacheSet } from "@/lib/cache";
 
 const FB_API = "https://graph.facebook.com/v19.0";
 
@@ -12,9 +13,7 @@ interface AdsInsightsQuery {
   refresh?: string;
 }
 
-// In-memory cache (per-process; good enough for single-instance dev, use Redis in multi-instance prod)
-const cache = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_SECONDS = 5 * 60; // 5 minutes
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -53,10 +52,8 @@ export async function GET(req: Request) {
 
   // Serve from cache if available (skip if refresh=true)
   if (query.refresh !== "true") {
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_DURATION_MS) {
-      return NextResponse.json(cached.data);
-    }
+    const cached = await cacheGet<unknown>(cacheKey);
+    if (cached) return NextResponse.json(cached);
   }
 
   const timeRange = JSON.stringify({ since: query.from, until: query.to });
@@ -251,8 +248,8 @@ export async function GET(req: Request) {
 
   const responseData = { ads: normalized };
 
-  // Store in cache
-  cache.set(cacheKey, { data: responseData, timestamp: Date.now() });
+  // Store in cache (Redis if configured, else in-memory)
+  await cacheSet(cacheKey, responseData, CACHE_TTL_SECONDS);
 
   return NextResponse.json(responseData);
 }

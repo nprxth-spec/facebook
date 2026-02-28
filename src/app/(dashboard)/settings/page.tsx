@@ -189,6 +189,21 @@ function SettingsContent() {
     try {
       const res = await fetch("/api/facebook/ad-accounts");
       const data = await res.json();
+
+      // Handle server-side rate limiting
+      if (res.status === 429) {
+        const secs = data.secondsLeft ?? 600;
+        const minutes = Math.floor(secs / 60);
+        const seconds = secs % 60;
+        toast.info(
+          isThai
+            ? `ใช้ข้อมูลล่าสุด (ซิงค์ใหม่ได้อีกครั้งใน ${minutes} นาที ${seconds} วินาที)`
+            : `Cached data used (Sync again in ${minutes}m ${seconds}s)`
+        );
+        reloadManagerAccounts();
+        return;
+      }
+
       if (!res.ok || data.error) {
         throw new Error(data.error || "ไม่สามารถดึงบัญชีจาก Facebook ได้");
       }
@@ -466,6 +481,21 @@ function SettingsContent() {
     try {
       const res = await fetch("/api/facebook/pages");
       const data = await res.json();
+
+      // Handle server-side rate limiting
+      if (res.status === 429) {
+        const secs = data.secondsLeft ?? 600;
+        const minutes = Math.floor(secs / 60);
+        const seconds = secs % 60;
+        toast.info(
+          isThai
+            ? `ใช้ข้อมูลล่าสุด (ซิงค์ใหม่ได้อีกครั้งใน ${minutes} นาที ${seconds} วินาที)`
+            : `Cached data used (Sync again in ${minutes}m ${seconds}s)`
+        );
+        reloadFacebookPages();
+        return;
+      }
+
       if (!res.ok || data.error) throw new Error(data.error || "Failed to fetch pages");
 
       const pagesFromFb: { id: string; name: string; username?: string | null; pageStatus?: string | null; pictureUrl?: string | null }[] = data.pages ?? [];

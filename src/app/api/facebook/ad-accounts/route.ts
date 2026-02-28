@@ -1,8 +1,10 @@
 import { auth } from "@/lib/auth";
 import { getFacebookToken } from "@/lib/tokens";
+import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 
 const FB_API = "https://graph.facebook.com/v19.0";
+const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
 export async function GET() {
   const session = await auth();
@@ -10,7 +12,23 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const token = await getFacebookToken(session.user.id);
+  const userId = session.user.id;
+
+  // ── Server-side rate limiting ────────────────────────────────────────────
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { lastFbAccountsSyncAt: true },
+  });
+  if (user?.lastFbAccountsSyncAt) {
+    const elapsed = Date.now() - user.lastFbAccountsSyncAt.getTime();
+    if (elapsed < SYNC_COOLDOWN_MS) {
+      const secondsLeft = Math.ceil((SYNC_COOLDOWN_MS - elapsed) / 1000);
+      return NextResponse.json({ error: "rate_limited", secondsLeft }, { status: 429 });
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const token = await getFacebookToken(userId);
   if (!token) {
     return NextResponse.json({ error: "Facebook account not connected" }, { status: 400 });
   }
@@ -43,6 +61,9 @@ export async function GET() {
       currency: acc.currency,
       timezone: acc.timezone_name,
     }));
+
+    // Stamp last sync time (for server-side rate limiting)
+    await prisma.user.update({ where: { id: userId }, data: { lastFbAccountsSyncAt: new Date() } });
 
     return NextResponse.json({ accounts });
   } catch (err) {
