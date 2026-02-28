@@ -959,95 +959,180 @@ export default function CreateAutoWizard() {
             {/*  ── Review Dialog ────────────────────────────────────────────────────────  */}
             <Dialog open={showReview} onOpenChange={setShowReview}>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>{isThai ? "ตรวจสอบข้อมูลก่อนสร้างแคมเปญ" : "Review Campaign Details"}</DialogTitle>
+                    <DialogHeader className="p-6 pb-2 shrink-0">
+                        <DialogTitle>{isThai ? "ตรวจสอบโพสต์ก่อนยืนยัน" : "Review Post Before Launch"}</DialogTitle>
                         <DialogDescription>
-                            {isThai ? "โปรดตรวจสอบความถูกต้องก่อนกดยืนยัน แคมเปญจะถูกสร้างในสถานะ PAUSED" : "Please review before confirming. Campaigns will be created as PAUSED."}
+                            {isThai ? "แคมเปญจะถูกสร้างในสถานะ PAUSED คุณสามารถตรวจสอบตัวอย่างโฆษณานี้ก่อนได้" : "Campaigns will be created as PAUSED. Please review your ad preview."}
                         </DialogDescription>
                     </DialogHeader>
-
-                    <div className="space-y-4 py-4">
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <p className="text-muted-foreground font-semibold">Ad Account</p>
-                                <p>{adAccounts.find(a => a.accountId === adAccountId || `act_${a.accountId}` === adAccountId)?.name || adAccountId}</p>
-                            </div>
-                            <div>
-                                <p className="text-muted-foreground font-semibold">Page</p>
-                                <p>{pages.find(p => p.pageId === pageId)?.name || pageId}</p>
-                            </div>
-                            <div>
-                                <p className="text-muted-foreground font-semibold">Objective</p>
-                                <p>{OBJECTIVES.find(o => o.value === campaignObjective)?.th || campaignObjective}</p>
-                            </div>
-                            <div>
-                                <p className="text-muted-foreground font-semibold">Budget (Daily)</p>
-                                <p>฿{dailyBudget}</p>
-                            </div>
-                        </div>
-
-                        <Separator />
-
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <p className="text-muted-foreground font-semibold mb-1">Structure</p>
-                                <p>{campaignCount} Campaign(s) × {adSetCount} Ad Set(s) × {adsCount} Ad(s)</p>
-                            </div>
-                            <div>
-                                <p className="text-muted-foreground font-semibold mb-1">Audience</p>
-                                <p>Location: {COUNTRIES.find(c => c.code === targetCountry)?.name} | Age: {ageMin}-{ageMax}</p>
-                                <p className="mt-1">Placements: {placements.join(", ")}</p>
-                            </div>
-                        </div>
-
-                        {/* Ad Copy */}
-                        {(primaryText || headline) && (
-                            <>
-                                <Separator />
-                                <div>
-                                    <p className="text-sm text-muted-foreground font-semibold mb-2">Ad Copy</p>
-                                    {primaryText && <p className="text-sm whitespace-pre-line border rounded p-3 bg-muted/30 mb-2">{primaryText}</p>}
-                                    {headline && <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">Headline: {headline}</p>}
+                    <div className="flex-1 overflow-y-auto p-6 pt-2 grid grid-cols-1 md:grid-cols-[1fr_350px] gap-8">
+                        {/* Facebook Post Mock UI */}
+                        <div className="flex justify-center items-start bg-muted/20 dark:bg-muted/10 p-6 rounded-2xl border">
+                            <div className="w-full max-w-[400px] bg-white dark:bg-zinc-950 border border-border shadow-sm rounded-xl overflow-hidden text-left relative">
+                                {/* Post Header */}
+                                <div className="p-3 flex items-center gap-2">
+                                    <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold text-lg shrink-0">
+                                        {pages.find(p => p.pageId === pageId)?.name?.charAt(0) || "P"}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-semibold text-[15px] truncate leading-tight dark:text-zinc-100">
+                                            {pages.find(p => p.pageId === pageId)?.name || "Facebook Page Name"}
+                                        </p>
+                                        <div className="flex items-center gap-1 text-[13px] text-muted-foreground mt-0.5">
+                                            <span>Sponsored</span>
+                                            <span>·</span>
+                                            <Globe className="h-3 w-3" />
+                                        </div>
+                                    </div>
+                                    <div className="shrink-0 text-muted-foreground">
+                                        <svg fill="currentColor" viewBox="0 0 20 20" className="w-5 h-5"><path d="M10 12a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0-6a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 12a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"></path></svg>
+                                    </div>
                                 </div>
-                            </>
-                        )}
 
-                        {/* Messenger */}
-                        {placements.includes("messenger") && (
-                            <>
-                                <Separator />
-                                <div>
-                                    <p className="text-sm text-muted-foreground font-semibold mb-2 flex items-center gap-2">
-                                        <MessageCircle className="h-4 w-4 text-blue-500" />
-                                        Messenger Setup
-                                    </p>
-                                    {selectedTemplateId && selectedTemplateId !== "manual" ? (
-                                        <p className="text-sm">Using Template: <span className="font-semibold text-blue-600">{templates.find(t => t.id === selectedTemplateId)?.name || selectedTemplateId}</span></p>
-                                    ) : (
-                                        <div className="border rounded-lg p-3 bg-blue-50/50 dark:bg-blue-900/10">
-                                            <p className="text-sm"><span className="font-medium text-muted-foreground">Greeting:</span> {greeting || "N/A"}</p>
-                                            <div className="mt-2">
-                                                <p className="text-sm font-medium text-muted-foreground">Icebreakers:</p>
-                                                <ul className="list-disc pl-5 text-sm mt-1 space-y-1">
-                                                    {iceBreakers.filter(i => i.question).map((ib, idx) => (
-                                                        <li key={idx} className="text-blue-800 dark:text-blue-300">{ib.question}</li>
-                                                    ))}
-                                                </ul>
+                                {/* Primary Text */}
+                                {primaryText && (
+                                    <div className="px-3 pb-3 text-[15px] whitespace-pre-line break-words dark:text-zinc-200">
+                                        {primaryText}
+                                    </div>
+                                )}
+
+                                {/* Media Preview */}
+                                <div className="w-full bg-zinc-100 dark:bg-zinc-900 flex items-center justify-center relative min-h-[250px] max-h-[400px] overflow-hidden">
+                                    {mediaFile ? (
+                                        mediaFile.type.startsWith("video/") ? (
+                                            <div className="flex flex-col items-center text-muted-foreground py-16">
+                                                <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center mb-2">
+                                                    <Play className="h-6 w-6 text-white ml-1" />
+                                                </div>
+                                                <span className="text-sm font-medium">Video Preview</span>
+                                                <span className="text-xs opacity-70 mt-1">{mediaFile.name}</span>
                                             </div>
+                                        ) : (
+                                            <img src={URL.createObjectURL(mediaFile)} alt="Ad Creative" className="w-full h-full object-cover" />
+                                        )
+                                    ) : selectedLibraryId ? (
+                                        library.find((v) => v.id === selectedLibraryId)?.thumbnail ? (
+                                            <div className="relative w-full h-full">
+                                                <img src={library.find((v) => v.id === selectedLibraryId)?.thumbnail as string} alt="Ad Creative" className="w-full h-full object-cover" />
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
+                                                        <Play className="h-6 w-6 text-white ml-1" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center text-muted-foreground py-16">
+                                                <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center mb-2">
+                                                    <Play className="h-6 w-6 text-white ml-1" />
+                                                </div>
+                                                <span className="text-sm font-medium">Library Video</span>
+                                            </div>
+                                        )
+                                    ) : (
+                                        <div className="flex flex-col items-center text-muted-foreground py-16">
+                                            <FileImage className="h-10 w-10 mb-2 opacity-50" />
+                                            <span className="text-sm">No Media</span>
                                         </div>
                                     )}
                                 </div>
-                            </>
-                        )}
-                    </div>
 
-                    <DialogFooter>
+                                {/* Bottom CTA Bar */}
+                                <div className="bg-zinc-50 dark:bg-zinc-900 border-t border-border p-3 flex items-center justify-between gap-3">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[11px] text-muted-foreground mb-0.5 uppercase tracking-wide">
+                                            {placements.includes("messenger") ? "MESSENGER" : "FORM ON FACEBOOK"}
+                                        </p>
+                                        <p className="font-semibold text-[15px] truncate dark:text-zinc-100">
+                                            {headline || (isThai ? "หัวข้อโฆษณา" : "Ad Headline")}
+                                        </p>
+                                    </div>
+                                    <div className="shrink-0 bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-[14px] font-semibold px-4 py-1.5 rounded-md">
+                                        {placements.includes("messenger") ? "Send message" : "Learn more"}
+                                    </div>
+                                </div>
+                                <div className="border-t px-3 py-2 flex justify-between items-center text-muted-foreground">
+                                    <div className="flex gap-4">
+                                        <div className="flex items-center gap-1.5"><svg viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"></path></svg><span className="text-xs">Like</span></div>
+                                        <div className="flex items-center gap-1.5"><MessageCircle className="w-5 h-5" /><span className="text-xs">Comment</span></div>
+                                        <div className="flex items-center gap-1.5"><svg viewBox="0 0 24 24" className="w-5 h-5 fill-current"><path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4 7.58 4 4 7.58 4 12H1l4 4 4-4H6z"></path></svg><span className="text-xs">Share</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Configuration Summary */}
+                        <div className="space-y-6">
+                            <div className="space-y-3">
+                                <h4 className="font-semibold text-sm border-b pb-2 text-zinc-800 dark:text-zinc-200">Campaign Settings</h4>
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                        <p className="text-muted-foreground text-[10px] uppercase tracking-wider mb-0.5">Ad Account</p>
+                                        <p className="font-medium truncate">{adAccounts.find(a => a.accountId === adAccountId || `act_${a.accountId}` === adAccountId)?.name || adAccountId}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-muted-foreground text-[10px] uppercase tracking-wider mb-0.5">Objective</p>
+                                        <p className="font-medium truncate">{OBJECTIVES.find(o => o.value === campaignObjective)?.th || campaignObjective}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-muted-foreground text-[10px] uppercase tracking-wider mb-0.5">Budget</p>
+                                        <p className="font-medium text-emerald-600 dark:text-emerald-400">฿{dailyBudget} / day</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-muted-foreground text-[10px] uppercase tracking-wider mb-0.5">Structure</p>
+                                        <p className="font-medium">{campaignCount}x{adSetCount}x{adsCount}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                <h4 className="font-semibold text-sm border-b pb-2 text-zinc-800 dark:text-zinc-200">Targeting</h4>
+                                <div className="text-sm space-y-1">
+                                    <p><span className="text-muted-foreground">Location:</span> <b>{COUNTRIES.find(c => c.code === targetCountry)?.name}</b></p>
+                                    <p><span className="text-muted-foreground">Age:</span> <b>{ageMin}-{ageMax}</b></p>
+                                    <p><span className="text-muted-foreground truncate block w-full mt-1">Placements: <span className="capitalize">{placements.join(", ")}</span></span></p>
+                                </div>
+                            </div>
+
+                            {/* Messenger Configuration Preview */}
+                            {placements.includes("messenger") && (
+                                <div className="space-y-3">
+                                    <h4 className="font-semibold text-sm border-b pb-2 flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                                        <MessageCircle className="h-4 w-4" /> Messenger Setup
+                                    </h4>
+                                    {selectedTemplateId && selectedTemplateId !== "manual" ? (
+                                        <p className="text-sm border rounded-lg p-3 bg-blue-50/50 dark:bg-blue-900/10">
+                                            Using template: <span className="font-semibold block mt-1 text-blue-700 dark:text-blue-400">{templates.find(t => t.id === selectedTemplateId)?.name || selectedTemplateId}</span>
+                                        </p>
+                                    ) : (
+                                        <div className="border rounded-lg p-3 bg-blue-50/50 dark:bg-blue-900/10 text-sm">
+                                            <p className="font-medium mb-3 pb-3 border-b border-blue-200 dark:border-blue-800/50 leading-relaxed">
+                                                <span className="text-xs font-semibold text-blue-600/70 dark:text-blue-400/70 uppercase tracking-wider block mb-1">Greeting Message</span>
+                                                {greeting || "No greeting set"}
+                                            </p>
+                                            <p className="text-xs font-semibold text-blue-600/70 dark:text-blue-400/70 uppercase tracking-wider mb-2">Icebreaker Questions</p>
+                                            <ul className="list-none space-y-1.5">
+                                                {iceBreakers.filter(i => i.question).length > 0 ? iceBreakers.filter(i => i.question).map((ib, idx) => (
+                                                    <li key={idx} className="flex gap-2 items-center bg-white dark:bg-blue-950 px-2.5 py-2 rounded-md text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900 shadow-sm">
+                                                        <MessageCircle className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                                                        <span className="truncate">{ib.question}</span>
+                                                    </li>
+                                                )) : (
+                                                    <li className="text-muted-foreground italic text-xs">No questions set</li>
+                                                )}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <DialogFooter className="p-4 border-t shrink-0 bg-muted/10 flex justify-between items-center w-full">
                         <Button variant="outline" onClick={() => setShowReview(false)} disabled={loading}>
-                            {isThai ? "ยกเลิก" : "Cancel"}
+                            {isThai ? "กลับไปแก้ไข" : "Go Back"}
                         </Button>
-                        <Button onClick={handleLaunch} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
+                        <Button onClick={handleLaunch} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white min-w-[160px]">
                             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
-                            {isThai ? "ยืนยันการสร้าง" : "Confirm Launch"}
+                            {isThai ? "ยืนยันสร้างโฆษณา" : "Confirm Launch"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
