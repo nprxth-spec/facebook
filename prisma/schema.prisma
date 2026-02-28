@@ -80,7 +80,8 @@ model FacebookPage {
   pageId     String
   name       String
   username   String?
-  pageStatus String?  // e.g. "PUBLISHED", "UNPUBLISHED", "CLOSED"
+  pageStatus String?
+  pictureUrl String?
   isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
 

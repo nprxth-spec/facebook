@@ -23,7 +23,7 @@ import { useTheme } from "@/components/providers/ThemeProvider";
 import { Language } from "@/lib/translations";
 
 interface ManagerAccount { id: string; accountId: string; name: string; platform: string; isActive: boolean }
-interface FacebookPage { id: string; pageId: string; name: string; username?: string | null; pageStatus?: string | null; isActive: boolean }
+interface FacebookPage { id: string; pageId: string; name: string; username?: string | null; pageStatus?: string | null; pictureUrl?: string | null; isActive: boolean }
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -450,7 +450,7 @@ function SettingsContent() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || "Failed to fetch pages");
 
-      const pagesFromFb: { id: string; name: string; username?: string | null; pageStatus?: string | null }[] = data.pages ?? [];
+      const pagesFromFb: { id: string; name: string; username?: string | null; pageStatus?: string | null; pictureUrl?: string | null }[] = data.pages ?? [];
       if (!pagesFromFb.length) {
         toast.info(isThai ? "ไม่พบเพจใน Facebook" : "No pages found on Facebook");
         return;
@@ -461,7 +461,7 @@ function SettingsContent() {
           fetch("/api/facebook-pages", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pageId: page.id, name: page.name, username: page.username, pageStatus: page.pageStatus }),
+            body: JSON.stringify({ pageId: page.id, name: page.name, username: page.username, pageStatus: page.pageStatus, pictureUrl: page.pictureUrl }),
           }).catch(() => null)
         )
       );
@@ -1148,11 +1148,22 @@ function SettingsContent() {
                                     <div className="flex items-center gap-2.5">
                                       <div className="relative w-8 h-8 shrink-0">
                                         <img
-                                          src={`https://graph.facebook.com/${page.pageId}/picture?type=square`}
+                                          src={page.pictureUrl || `https://graph.facebook.com/${page.pageId}/picture?type=square`}
                                           alt={page.name}
                                           className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-gray-700 bg-gray-100"
-                                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                          onError={(e) => {
+                                            const img = e.target as HTMLImageElement;
+                                            img.style.display = "none";
+                                            const fallback = img.nextElementSibling as HTMLElement | null;
+                                            if (fallback) fallback.style.display = "flex";
+                                          }}
                                         />
+                                        <div
+                                          className="w-8 h-8 rounded-full bg-[#1877F2]/10 border border-[#1877F2]/30 items-center justify-center text-[#1877F2] text-xs font-bold hidden"
+                                          aria-hidden
+                                        >
+                                          {page.name.charAt(0).toUpperCase()}
+                                        </div>
                                         <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#1877F2] flex items-center justify-center border border-white dark:border-gray-900">
                                           <FacebookIcon className="w-2 h-2 text-white" />
                                         </span>

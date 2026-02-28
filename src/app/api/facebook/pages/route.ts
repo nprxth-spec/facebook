@@ -42,14 +42,20 @@ export async function GET() {
             verification_status?: string;
         }> = data.data || [];
 
-        // Fetch page_status individually using page access tokens
+        // Fetch is_published + picture URL using page access tokens (one call per page)
         const pages = await Promise.all(rawPages.map(async (p) => {
             let pageStatus: string | null = null;
+            let pictureUrl: string | null = null;
             if (p.access_token) {
                 try {
-                    const detailRes = await fetch(`${FB_API}/${p.id}?fields=page_status&access_token=${p.access_token}`);
+                    const detailRes = await fetch(
+                        `${FB_API}/${p.id}?fields=is_published,picture.type(square){url}&access_token=${p.access_token}`
+                    );
                     const detailData = await detailRes.json();
-                    pageStatus = detailData.page_status ?? null;
+                    if (typeof detailData.is_published === "boolean") {
+                        pageStatus = detailData.is_published ? "PUBLISHED" : "UNPUBLISHED";
+                    }
+                    pictureUrl = detailData.picture?.data?.url ?? null;
                 } catch {
                     // ignore
                 }
@@ -60,6 +66,7 @@ export async function GET() {
                 username: p.username ?? null,
                 category: p.category,
                 pageStatus,
+                pictureUrl,
                 hasToken: !!p.access_token,
             };
         }));

@@ -40,6 +40,7 @@ export async function POST(req: Request) {
                 name: body.name,
                 username: body.username ?? null,
                 pageStatus: body.pageStatus ?? null,
+                pictureUrl: body.pictureUrl ?? null,
             }
         });
     } else {
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
                 name: body.name,
                 username: body.username ?? null,
                 pageStatus: body.pageStatus ?? null,
+                pictureUrl: body.pictureUrl ?? null,
             },
         });
     }
