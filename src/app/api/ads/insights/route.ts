@@ -91,7 +91,7 @@ export async function GET(req: Request) {
             adsUrl.searchParams.set("ids", chunk.join(","));
             adsUrl.searchParams.set(
               "fields",
-              "id,name,effective_status,configured_status,adset{targeting{geo_locations,age_min,age_max,interests}},adcreatives{image_url,thumbnail_url,actor_id,instagram_actor_id,effective_object_story_id,object_story_id,object_story_spec{page_id,link_data{picture},video_data{image_url},photo_data{url}}}"
+              "id,name,effective_status,configured_status,adset{name,targeting,targeting_optimization_types,optimization_goal},adcreatives{image_url,thumbnail_url,actor_id{id,name,username},instagram_actor_id,effective_object_story_id,object_story_id,object_story_spec{page_id{id,name,username},link_data{picture},video_data{image_url},photo_data{url}}}"
             );
             adsUrl.searchParams.set("access_token", token);
             chunkPromises.push(
@@ -115,30 +115,35 @@ export async function GET(req: Request) {
     })
   );
 
-  // Bulk fetch page names/usernames - Improved extraction
-  const uniquePageIds = Array.from(
-    new Set(
-      allAds.flatMap((ad) => {
-        const creatives = ad.adcreatives?.data || [];
-        return creatives.map((c: any) => {
-          // Priority 1: Direct page_id in spec
-          if (c.object_story_spec?.page_id) return String(c.object_story_spec.page_id);
-          // Priority 2: actor_id
-          if (c.actor_id) return String(c.actor_id);
-          // Priority 3: Parse from object_story_id (FORMAT: PAGEID_POSTID)
-          const sid = c.effective_object_story_id || c.object_story_id;
-          if (sid && sid.includes("_")) return sid.split("_")[0];
-          return null;
-        });
-      }).filter(Boolean)
-    )
-  ) as string[];
+  // First pass: extract page info inline from expanded actor_id / page_id objects
+  // Collect IDs that still need a name lookup (e.g. IDs from effective_object_story_id split)
+  const missingPageIds = new Set<string>();
+  for (const ad of allAds) {
+    const creatives: any[] = ad.adcreatives?.data || [];
+    for (const c of creatives) {
+      const actorObj = typeof c.actor_id === "object" && c.actor_id !== null ? c.actor_id : null;
+      const pageIdObj = typeof c.object_story_spec?.page_id === "object" && c.object_story_spec?.page_id !== null
+        ? c.object_story_spec.page_id : null;
+      const storyPid = (c.effective_object_story_id || c.object_story_id || "").split("_")[0];
 
+      const pid = actorObj?.id || pageIdObj?.id ||
+        (typeof c.object_story_spec?.page_id === "string" ? c.object_story_spec.page_id : null) ||
+        storyPid || null;
+
+      if (pid && !actorObj?.name && !pageIdObj?.name) {
+        missingPageIds.add(String(pid));
+      }
+      break; // only first creative matters for page id
+    }
+  }
+
+  // Batch fetch names ONLY for remaining page IDs that have no inline name
   const pagesData: Record<string, any> = {};
-  if (uniquePageIds.length > 0) {
+  if (missingPageIds.size > 0) {
+    const missingArr = Array.from(missingPageIds);
     const pageChunkPromises = [];
-    for (let i = 0; i < uniquePageIds.length; i += 50) {
-      const chunk = uniquePageIds.slice(i, i + 50);
+    for (let i = 0; i < missingArr.length; i += 50) {
+      const chunk = missingArr.slice(i, i + 50);
       const pUrl = new URL(`${FB_API}`);
       pUrl.searchParams.set("ids", chunk.join(","));
       pUrl.searchParams.set("fields", "name,username");
@@ -149,10 +154,8 @@ export async function GET(req: Request) {
           .catch(() => null)
       );
     }
-    const pageChunkResults = await Promise.all(pageChunkPromises);
-    pageChunkResults.forEach((pData) => {
-      if (pData && !pData.error) Object.assign(pagesData, pData);
-    });
+    const results = await Promise.all(pageChunkPromises);
+    results.forEach((d) => { if (d && !d.error) Object.assign(pagesData, d); });
   }
 
   const searchLower = query.search?.toLowerCase() ?? "";
@@ -167,9 +170,46 @@ export async function GET(req: Request) {
       const targeting = ad.adset?.targeting ?? ad.targeting ?? {};
       const geo = targeting.geo_locations ?? {};
       const countries: string[] = geo.countries ?? [];
-      const ageMin = targeting.age_min ?? null;
-      const ageMax = targeting.age_max ?? null;
-      const interests: string[] = (targeting.interests ?? []).map((i: any) => i.name).filter(Boolean);
+      let ageMin = targeting.age_min ?? null;
+      let ageMax = targeting.age_max ?? null;
+
+      // Advantage+ Audience uses age_range [min, max]
+      if (targeting.age_range && Array.isArray(targeting.age_range) && targeting.age_range.length === 2) {
+        ageMin = targeting.age_range[0];
+        ageMax = targeting.age_range[1];
+      }
+
+      if (targeting.flexible_spec) {
+        targeting.flexible_spec.forEach((spec: any) => {
+          if (spec.age_min !== undefined) ageMin = spec.age_min;
+          if (spec.age_max !== undefined) ageMax = spec.age_max;
+        });
+      }
+
+      let interests: string[] = (targeting.interests ?? []).map((i: any) => i.name).filter(Boolean);
+      if (targeting.flexible_spec) {
+        targeting.flexible_spec.forEach((spec: any) => {
+          if (spec.interests) {
+            interests.push(...spec.interests.map((i: any) => i.name).filter(Boolean));
+          }
+          if (spec.behaviors) {
+            interests.push(...spec.behaviors.map((i: any) => i.name).filter(Boolean));
+          }
+          if (spec.work_employers) {
+            interests.push(...spec.work_employers.map((i: any) => i.name).filter(Boolean));
+          }
+          if (spec.work_positions) {
+            interests.push(...spec.work_positions.map((i: any) => i.name).filter(Boolean));
+          }
+          if (spec.education_schools) {
+            interests.push(...spec.education_schools.map((i: any) => i.name).filter(Boolean));
+          }
+          if (spec.education_majors) {
+            interests.push(...spec.education_majors.map((i: any) => i.name).filter(Boolean));
+          }
+        });
+      }
+      interests = Array.from(new Set(interests));
 
       const creative = ad.adcreatives?.data?.[0] ?? null;
       let picture = "";
@@ -178,17 +218,21 @@ export async function GET(req: Request) {
       let pageUsername: string | null = null;
 
       if (creative) {
-        // Find pageId from fallbacks
+        // Extract page info - prefer inline expanded objects, fall back to pagesData for story-id cases
         const creatives = ad.adcreatives?.data || [];
         for (const c of creatives) {
-          const pid = c.object_story_spec?.page_id ||
-            c.actor_id ||
-            (c.effective_object_story_id || c.object_story_id || "").split("_")[0];
+          const actorObj = typeof c.actor_id === "object" && c.actor_id !== null ? c.actor_id : null;
+          const pageIdObj = typeof c.object_story_spec?.page_id === "object" && c.object_story_spec?.page_id !== null
+            ? c.object_story_spec.page_id : null;
+          const rawPageId = typeof c.object_story_spec?.page_id === "string" ? c.object_story_spec.page_id : null;
+          const storyPid = (c.effective_object_story_id || c.object_story_id || "").split("_")[0];
 
-          if (pid && pagesData[pid]) {
+          const pid = actorObj?.id || pageIdObj?.id || rawPageId || storyPid || null;
+
+          if (pid) {
             pageId = String(pid);
-            pageName = pagesData[pid].name || null;
-            pageUsername = pagesData[pid].username || null;
+            pageName = actorObj?.name || pageIdObj?.name || pagesData[pid]?.name || null;
+            pageUsername = actorObj?.username || pageIdObj?.username || pagesData[pid]?.username || null;
             break;
           }
         }
@@ -240,11 +284,17 @@ export async function GET(req: Request) {
         costPerResult = spend / (resultValue || 1);
       }
 
+      const storyId = creative?.effective_object_story_id || creative?.object_story_id;
+      const adPostUrl = storyId ? `https://facebook.com/${storyId}` : null;
+      const adsManagerUrl = `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${ad.account_id}`;
+
       return {
         id: ad.ad_id as string,
         name: (ad.ad_name || ad.name) as string,
         accountId: ad.account_id as string,
         accountName: ad._accountName as string,
+        adsManagerUrl,
+        adPostUrl,
         pageId: pageId as string | null,
         pageName: pageName as string | null,
         pageUsername: pageUsername as string | null,

@@ -19,7 +19,13 @@ import {
   Search,
   X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useTheme } from "@/components/providers/ThemeProvider";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   addMonths,
   eachDayOfInterval,
@@ -375,6 +381,8 @@ interface AdRow {
   spend: number;
   costPerResult: number;
   status: string;
+  adsManagerUrl: string;
+  adPostUrl: string | null;
 }
 
 export default function AdsPage() {
@@ -469,6 +477,14 @@ export default function AdsPage() {
     if (k.includes("paused")) return isThai ? "หยุดชั่วคราว" : "Paused";
     if (k.includes("deleted")) return isThai ? "ลบแล้ว" : "Deleted";
     return s;
+  };
+
+  const getStatusColor = (s: string) => {
+    const k = s.toLowerCase();
+    if (k.includes("active")) return "bg-green-500";
+    if (k.includes("paused")) return "bg-yellow-500";
+    if (k.includes("deleted")) return "bg-red-500";
+    return "bg-slate-400";
   };
 
   return (
@@ -620,6 +636,9 @@ export default function AdsPage() {
                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[180px]">
                       {isThai ? "กลุ่มเป้าหมาย" : "Targeting"}
                     </th>
+                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                      {isThai ? "สถานะ" : "Status"}
+                    </th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                       {isThai ? "ผลลัพธ์" : "Results"}
                     </th>
@@ -628,9 +647,6 @@ export default function AdsPage() {
                     </th>
                     <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                       {isThai ? "ต้นทุนต่อผลลัพธ์" : "Cost / result"}
-                    </th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                      {isThai ? "สถานะ" : "Status"}
                     </th>
                   </tr>
                 </thead>
@@ -644,10 +660,21 @@ export default function AdsPage() {
                         {idx + 1}
                       </td>
                       <td className="px-3 py-2">
-                        <div className="text-sm text-gray-900 dark:text-gray-100 truncate">
+                        <a
+                          href={ad.adsManagerUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-primary hover:underline transition-colors block truncate"
+                        >
                           {ad.accountName}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
+                        </a>
+                        <div
+                          className="text-xs text-gray-500 cursor-pointer hover:text-primary transition-colors w-fit mt-0.5"
+                          onClick={() => {
+                            navigator.clipboard.writeText(ad.accountId);
+                            toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
+                          }}
+                        >
                           {ad.accountId}
                         </div>
                       </td>
@@ -662,10 +689,27 @@ export default function AdsPage() {
                             />
                           </div>
                           <div className="min-w-0 py-1 pr-2">
-                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                              {ad.name}
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {ad.adPostUrl ? (
+                              <a
+                                href={ad.adPostUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-normal text-gray-900 dark:text-gray-100 hover:text-primary hover:underline transition-colors block truncate"
+                              >
+                                {ad.name}
+                              </a>
+                            ) : (
+                              <div className="text-sm font-normal text-gray-900 dark:text-gray-100 truncate">
+                                {ad.name}
+                              </div>
+                            )}
+                            <div
+                              className="text-xs text-gray-500 cursor-pointer hover:text-primary transition-colors w-fit"
+                              onClick={() => {
+                                navigator.clipboard.writeText(ad.id);
+                                toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
+                              }}
+                            >
                               ID: {ad.id}
                             </div>
                           </div>
@@ -673,24 +717,30 @@ export default function AdsPage() {
                       </td>
                       <td className="p-[1px]">
                         <div className="flex flex-col justify-center h-full min-w-0 py-1 pl-2">
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                          <div className="text-sm font-normal text-gray-900 dark:text-gray-100 truncate">
                             {ad.pageName ?? (ad.pageId ? `Page ${ad.pageId}` : "—")}
                           </div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
                             {ad.pageUsername ? `@${ad.pageUsername}` : "—"}
                           </div>
                           {ad.pageId && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
+                            <div
+                              className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-primary transition-colors w-fit mt-0.5"
+                              onClick={() => {
+                                navigator.clipboard.writeText(ad.pageId!);
+                                toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
+                              }}
+                            >
                               ID: {ad.pageId}
                             </div>
                           )}
                         </div>
                       </td>
                       <td className="px-3 py-2">
-                        <div className="text-xs text-gray-700 dark:text-gray-300 space-y-0.5">
+                        <div className="text-[11px] leading-snug text-gray-700 dark:text-gray-300 space-y-0.5">
                           {ad.targeting.countries.length > 0 && (
                             <div>
-                              <span className="font-medium">
+                              <span className="font-medium text-gray-500">
                                 {isThai ? "ประเทศ:" : "Countries:"}{" "}
                               </span>
                               {ad.targeting.countries.join(", ")}
@@ -698,45 +748,64 @@ export default function AdsPage() {
                           )}
                           {(ad.targeting.ageMin || ad.targeting.ageMax) && (
                             <div>
-                              <span className="font-medium">
+                              <span className="font-medium text-gray-500">
                                 {isThai ? "อายุ:" : "Age:"}{" "}
                               </span>
                               {ad.targeting.ageMin ?? "?"}–{ad.targeting.ageMax ?? "?"}
                             </div>
                           )}
                           {ad.targeting.interests.length > 0 && (
-                            <div>
-                              <span className="font-medium">
+                            <div className="flex items-start flex-wrap">
+                              <span className="font-medium text-gray-500 mr-1 whitespace-nowrap">
                                 {isThai ? "ความสนใจ:" : "Interests:"}{" "}
                               </span>
-                              {ad.targeting.interests.slice(0, 3).join(", ")}
-                              {ad.targeting.interests.length > 3 && " ..."}
+                              <span className="inline-block truncate max-w-[120px]" title={ad.targeting.interests[0]}>
+                                {ad.targeting.interests[0]}
+                              </span>
+                              {ad.targeting.interests.length > 1 && (
+                                <Popover>
+                                  <PopoverTrigger className="ml-1 text-[10px] text-primary font-bold hover:underline whitespace-nowrap">
+                                    +{ad.targeting.interests.length - 1} {isThai ? "เพิ่มเติม" : "more"}
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[320px] p-4 z-[60] shadow-xl">
+                                    <div className="font-semibold text-sm mb-3 border-b pb-2 flex justify-between items-center text-gray-900 dark:text-gray-100">
+                                      <span>{isThai ? "ความสนใจทั้งหมด" : "All Interests"}</span>
+                                      <Badge variant="secondary" className="text-[10px] font-bold px-1.5 py-0">{ad.targeting.interests.length}</Badge>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto pr-2">
+                                      {ad.targeting.interests.map((int, i) => (
+                                        <Badge key={i} variant="outline" className="text-xs font-medium px-2 py-0.5 bg-gray-50/50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300">
+                                          {int}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              )}
                             </div>
                           )}
                         </div>
                       </td>
+                      <td className="px-3 py-2 text-left">
+                        <div className="flex items-center justify-start gap-1.5 text-xs font-normal text-gray-700 dark:text-gray-300">
+                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getStatusColor(ad.status)}`} />
+                          {formatStatus(ad.status)}
+                        </div>
+                      </td>
                       <td className="px-3 py-2 text-right">
-                        <div className="text-sm text-gray-900 dark:text-gray-100">
+                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {formatCurrency(ad.result)}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <div className="text-sm text-gray-900 dark:text-gray-100">
+                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {formatCurrency(ad.spend)}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <div className="text-sm text-gray-900 dark:text-gray-100">
+                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {formatCurrency(ad.costPerResult)}
                         </div>
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <Badge
-                          variant="secondary"
-                          className="text-xs px-2 py-0.5"
-                        >
-                          {formatStatus(ad.status)}
-                        </Badge>
                       </td>
                     </tr>
                   ))}
@@ -746,7 +815,7 @@ export default function AdsPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </div >
   );
 }
 

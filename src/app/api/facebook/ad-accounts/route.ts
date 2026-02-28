@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 const FB_API = "https://graph.facebook.com/v19.0";
 const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -14,16 +14,21 @@ export async function GET() {
 
   const userId = session.user.id;
 
-  // ── Server-side rate limiting ────────────────────────────────────────────
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { lastFbAccountsSyncAt: true },
-  });
-  if (user?.lastFbAccountsSyncAt) {
-    const elapsed = Date.now() - user.lastFbAccountsSyncAt.getTime();
-    if (elapsed < SYNC_COOLDOWN_MS) {
-      const secondsLeft = Math.ceil((SYNC_COOLDOWN_MS - elapsed) / 1000);
-      return NextResponse.json({ error: "rate_limited", secondsLeft }, { status: 429 });
+  const { searchParams } = new URL(req.url);
+  const isSync = searchParams.get("sync") === "true";
+
+  // ── Server-side rate limiting (Only for sync=true) ──────────────────────────
+  if (isSync) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastFbAccountsSyncAt: true },
+    });
+    if (user?.lastFbAccountsSyncAt) {
+      const elapsed = Date.now() - user.lastFbAccountsSyncAt.getTime();
+      if (elapsed < SYNC_COOLDOWN_MS) {
+        const secondsLeft = Math.ceil((SYNC_COOLDOWN_MS - elapsed) / 1000);
+        return NextResponse.json({ error: "rate_limited", secondsLeft }, { status: 429 });
+      }
     }
   }
   // ─────────────────────────────────────────────────────────────────────────
@@ -62,8 +67,10 @@ export async function GET() {
       timezone: acc.timezone_name,
     }));
 
-    // Stamp last sync time (for server-side rate limiting)
-    await prisma.user.update({ where: { id: userId }, data: { lastFbAccountsSyncAt: new Date() } });
+    // Stamp last sync time (for server-side rate limiting) - Only if explicit sync
+    if (isSync) {
+      await prisma.user.update({ where: { id: userId }, data: { lastFbAccountsSyncAt: new Date() } });
+    }
 
     return NextResponse.json({ accounts });
   } catch (err) {

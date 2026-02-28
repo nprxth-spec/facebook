@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import dynamic from "next/dynamic";
+import { Loader2, Users, Sparkles, Target, Zap } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Loader2 } from "lucide-react";
 import { useTheme } from "@/components/providers/ThemeProvider";
 
-const AudiencesContent = dynamic(() => import("./audiences"), {
+const AudiencesContent = dynamic<{ activeTab: TabKey }>(() => import("./audiences"), {
     loading: () => <TabLoadingState />,
     ssr: false,
 });
@@ -20,7 +20,7 @@ function TabLoadingState() {
     );
 }
 
-type TabKey = "audiences" | "creative" | "rules";
+type TabKey = "engagement" | "lookalike" | "interest";
 
 function ToolsPageContent() {
     const { language } = useTheme();
@@ -30,10 +30,10 @@ function ToolsPageContent() {
     const router = useRouter();
     const pathname = usePathname();
 
-    const tabFromUrl = searchParams.get("tab") || "audiences";
-    const validTabs: TabKey[] = ["audiences", "creative", "rules"];
+    const tabFromUrl = searchParams.get("tab") || "engagement";
+    const validTabs: TabKey[] = ["engagement", "lookalike", "interest"];
     const [activeTab, setActiveTab] = useState<TabKey>(
-        validTabs.includes(tabFromUrl as TabKey) ? (tabFromUrl as TabKey) : "audiences"
+        validTabs.includes(tabFromUrl as TabKey) ? (tabFromUrl as TabKey) : "engagement"
     );
 
     // Sync URL when tab changes
@@ -54,26 +54,38 @@ function ToolsPageContent() {
     }, [searchParams, activeTab]);
 
     return (
-        <div className="h-full flex flex-col overflow-hidden max-w-7xl mx-auto">
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0 pt-4">
-                <div className="shrink-0 px-6 md:px-8 border-b bg-background">
-                    <TabsList className="bg-transparent p-0 h-auto gap-4">
+        <div className="h-full flex flex-col overflow-hidden -mx-6 sm:-mx-[60px] lg:-mx-[100px]">
+            <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0">
+                <div className="shrink-0 px-6 sm:px-[60px] lg:px-[100px] h-14 flex items-end border-b bg-white/95 dark:bg-gray-900/95 backdrop-blur-md sticky top-0 z-30">
+                    <TabsList className="bg-transparent p-0 h-auto gap-8 mt-1">
                         <TabsTrigger
-                            value="audiences"
+                            value="engagement"
+                            className="rounded-none border-b-2 border-transparent bg-transparent px-1 pb-3 pt-1 font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+                        >
+                            <Target className="mr-2 h-4 w-4" />
+                            Engagement
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="lookalike"
                             className="rounded-none border-b-2 border-transparent bg-transparent px-1 pb-3 pt-1 font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
                         >
                             <Users className="mr-2 h-4 w-4" />
-                            {isThai ? "กลุ่มเป้าหมาย (Audiences)" : "Audiences"}
+                            Lookalike
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="interest"
+                            className="rounded-none border-b-2 border-transparent bg-transparent px-1 pb-3 pt-1 font-medium text-muted-foreground shadow-none transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none"
+                        >
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            Interest (AI)
                         </TabsTrigger>
                     </TabsList>
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-y-auto">
-                    <TabsContent value="audiences" className="h-full m-0 data-[state=inactive]:hidden">
-                        <Suspense fallback={<TabLoadingState />}>
-                            <AudiencesContent />
-                        </Suspense>
-                    </TabsContent>
+                    <Suspense fallback={<TabLoadingState />}>
+                        <AudiencesContent activeTab={activeTab} />
+                    </Suspense>
                 </div>
             </Tabs>
         </div>

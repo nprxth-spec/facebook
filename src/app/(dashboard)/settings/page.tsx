@@ -187,7 +187,7 @@ function SettingsContent() {
 
     setSyncingFbAccounts(true);
     try {
-      const res = await fetch("/api/facebook/ad-accounts");
+      const res = await fetch("/api/facebook/ad-accounts?sync=true");
       const data = await res.json();
 
       // Handle server-side rate limiting
@@ -200,7 +200,7 @@ function SettingsContent() {
             ? `ใช้ข้อมูลล่าสุด (ซิงค์ใหม่ได้อีกครั้งใน ${minutes} นาที ${seconds} วินาที)`
             : `Cached data used (Sync again in ${minutes}m ${seconds}s)`
         );
-        reloadManagerAccounts();
+        // reloadManagerAccounts(false); // don't call status check if we are 429ed
         return;
       }
 
@@ -258,36 +258,33 @@ function SettingsContent() {
     }
   };
 
-  // Load manager accounts (และถ้าไม่มีเลย ให้ลอง sync จาก Facebook อัตโนมัติหนึ่งครั้ง)
+  // Load manager accounts (ดึงจาก DB เท่านั้นตอนเริ่ม)
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/manager-accounts");
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setAccounts(data);
-          // ดึงสถานะจาก Facebook มาประกอบการแสดงผล
-          try {
-            const fbRes = await fetch("/api/facebook/ad-accounts");
-            const fbData = await fbRes.json();
-            if (!fbData.error && Array.isArray(fbData.accounts)) {
-              const map: Record<string, number> = {};
-              fbData.accounts.forEach(
-                (acc: { id: string; accountId: string; status?: number }) => {
-                  if (typeof acc.status === "number") {
-                    map[acc.id] = acc.status;
-                    map[acc.accountId] = acc.status;
+          // ดึงสถานะจาก Facebook มาประกอบการแสดงผล (แบบ Light ไม่ sync)
+          if (data.length > 0) {
+            try {
+              const fbRes = await fetch("/api/facebook/ad-accounts");
+              const fbData = await fbRes.json();
+              if (fbRes.ok && Array.isArray(fbData.accounts)) {
+                const map: Record<string, number> = {};
+                fbData.accounts.forEach(
+                  (acc: { id: string; accountId: string; status?: number }) => {
+                    if (typeof acc.status === "number") {
+                      map[acc.id] = acc.status;
+                      map[acc.accountId] = acc.status;
+                    }
                   }
-                }
-              );
-              setFbStatuses(map);
-            }
-          } catch {
-            // แค่ดึงสถานะไม่ได้ ไม่ต้องขว้าง error ต่อ
+                );
+                setFbStatuses(map);
+              }
+            } catch { /* ignore */ }
           }
-        } else {
-          // ถ้ายังไม่มีบัญชีเลย ลองดึงจาก Facebook มาเติมให้
-          await syncManagerAccountsFromFacebook();
         }
       } catch {
         setAccounts([]);
@@ -479,7 +476,7 @@ function SettingsContent() {
 
     setSyncingPages(true);
     try {
-      const res = await fetch("/api/facebook/pages");
+      const res = await fetch("/api/facebook/pages?sync=true");
       const data = await res.json();
 
       // Handle server-side rate limiting
@@ -614,7 +611,7 @@ function SettingsContent() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 lg:px-0">
+    <div className="mx-auto max-w-[1400px] flex flex-col gap-6 py-8">
       <Card className="shadow-sm min-h-[calc(100vh-8rem)] max-h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
         <CardHeader className="pb-4 shrink-0">
           <CardTitle className="text-2xl">
@@ -948,16 +945,41 @@ function SettingsContent() {
                                     </span>
                                   </td>
                                   <td className="px-4 py-1.5 text-center">
-                                    <Badge
-                                      variant={getAccountStatusVariant(acc)}
-                                      className={cn(
-                                        "text-xs px-3 py-0.5",
-                                        (fbStatuses[acc.accountId] ?? fbStatuses[acc.id]) === 9 &&
-                                        "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
-                                      )}
-                                    >
-                                      {getAccountStatusLabel(acc)}
-                                    </Badge>
+                                    {(() => {
+                                      const code = fbStatuses[acc.accountId] ?? fbStatuses[acc.id];
+                                      const label = getAccountStatusLabel(acc);
+
+                                      if (code === 1) {
+                                        return (
+                                          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-xs px-2 py-0.5 font-medium mx-auto">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                                            {label}
+                                          </span>
+                                        );
+                                      }
+                                      if (code === 2 || code === 7 || code === 3) {
+                                        return (
+                                          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs px-2 py-0.5 font-medium mx-auto">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                                            {label}
+                                          </span>
+                                        );
+                                      }
+                                      if (code === 9) {
+                                        return (
+                                          <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 text-xs px-2 py-0.5 font-medium mx-auto">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                                            {label}
+                                          </span>
+                                        );
+                                      }
+                                      return (
+                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-xs px-2 py-0.5 font-medium mx-auto border border-gray-100 dark:border-gray-700">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0" />
+                                          {label}
+                                        </span>
+                                      );
+                                    })()}
                                   </td>
                                   <td className="px-4 py-1.5 text-center">
                                     <Switch

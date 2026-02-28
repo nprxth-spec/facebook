@@ -11,7 +11,7 @@ const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
  * Fetch all pages the user has access to via Facebook Graph API.
  * Includes server-side rate limiting (10-min cooldown per user via DB timestamp).
  */
-export async function GET() {
+export async function GET(req: Request) {
     try {
         const session = await auth();
         if (!session?.user?.id) {
@@ -20,20 +20,25 @@ export async function GET() {
 
         const userId = session.user.id;
 
-        // ── Server-side rate limiting ──────────────────────────────────────────
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { lastFbPagesSyncAt: true },
-        });
+        const { searchParams } = new URL(req.url);
+        const isSync = searchParams.get("sync") === "true";
 
-        if (user?.lastFbPagesSyncAt) {
-            const elapsed = Date.now() - user.lastFbPagesSyncAt.getTime();
-            if (elapsed < SYNC_COOLDOWN_MS) {
-                const secondsLeft = Math.ceil((SYNC_COOLDOWN_MS - elapsed) / 1000);
-                return NextResponse.json(
-                    { error: `rate_limited`, secondsLeft },
-                    { status: 429 }
-                );
+        // ── Server-side rate limiting (Only for sync=true) ──────────────────────────
+        if (isSync) {
+            const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { lastFbPagesSyncAt: true },
+            });
+
+            if (user?.lastFbPagesSyncAt) {
+                const elapsed = Date.now() - user.lastFbPagesSyncAt.getTime();
+                if (elapsed < SYNC_COOLDOWN_MS) {
+                    const secondsLeft = Math.ceil((SYNC_COOLDOWN_MS - elapsed) / 1000);
+                    return NextResponse.json(
+                        { error: `rate_limited`, secondsLeft },
+                        { status: 429 }
+                    );
+                }
             }
         }
         // ──────────────────────────────────────────────────────────────────────
@@ -95,11 +100,13 @@ export async function GET() {
             };
         });
 
-        // Update server-side rate limit timestamp
-        await prisma.user.update({
-            where: { id: userId },
-            data: { lastFbPagesSyncAt: new Date() },
-        });
+        // Update server-side rate limit timestamp - Only if explicit sync
+        if (isSync) {
+            await prisma.user.update({
+                where: { id: userId },
+                data: { lastFbPagesSyncAt: new Date() },
+            });
+        }
 
         return NextResponse.json({ pages });
     } catch (error: unknown) {

@@ -4,7 +4,7 @@ export default function ToolsLayout({
     children: React.ReactNode;
 }) {
     return (
-        <div className="flex-1 w-full h-full bg-slate-50 dark:bg-zinc-950">
+        <div className="flex-1 w-full h-full dark:bg-zinc-950">
             {children}
         </div>
     );

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
-    Users, Loader2, Plus, ChevronsUpDown, Search, ExternalLink, Sparkles, CheckCircle2, XCircle
+    Users, Loader2, Plus, ChevronsUpDown, Search, ExternalLink, Sparkles, CheckCircle2, XCircle, RefreshCw, Trash2
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,16 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { useTheme } from "@/components/providers/ThemeProvider";
 
@@ -42,7 +52,7 @@ interface InterestPreset {
     interests: Array<{ id: string; name: string }>;
 }
 
-export default function AudiencesPage() {
+export default function AudiencesPage({ activeTab }: { activeTab: TabKey }) {
     const { language } = useTheme();
     const isThai = language === 'th';
 
@@ -51,7 +61,6 @@ export default function AudiencesPage() {
     const [pages, setPages] = useState<any[]>([]); // simplified for this port
     const [accountsLoading, setAccountsLoading] = useState(true);
 
-    const [activeTab, setActiveTab] = useState<TabKey>("engagement");
     const [adAccountIds, setAdAccountIds] = useState<string[]>([]);
     const [selectedPageIds, setSelectedPageIds] = useState<string[]>([]);
 
@@ -63,6 +72,8 @@ export default function AudiencesPage() {
     const [loadingAudiences, setLoadingAudiences] = useState(false);
     const [creating, setCreating] = useState(false);
     const [creationProgress, setCreationProgress] = useState<Record<string, "creating" | "success" | "error">>({});
+    const [deleteTarget, setDeleteTarget] = useState<CustomAudience | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const [pageSearch, setPageSearch] = useState("");
     const [accountPopoverOpen, setAccountPopoverOpen] = useState(false);
@@ -168,6 +179,27 @@ export default function AudiencesPage() {
     useEffect(() => {
         if (activeTab === "interest") loadInterestPresets();
     }, [activeTab, loadInterestPresets]);
+
+    const handleDelete = async () => {
+        if (!deleteTarget?.accountId) return;
+        setDeleting(true);
+        try {
+            const res = await fetch("/api/facebook/custom-audiences", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "delete", audienceId: deleteTarget.id, adAccountId: deleteTarget.accountId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed");
+            toast.success("ลบกลุ่มเป้าหมายสำเร็จ");
+            setAudiences((prev) => prev.filter((a) => a.id !== deleteTarget.id));
+        } catch (e: any) {
+            toast.error(e.message || "Failed to delete");
+        } finally {
+            setDeleting(false);
+            setDeleteTarget(null);
+        }
+    };
 
     const handleGenerateInterest = async () => {
         const manual = interestManualInput.trim();
@@ -365,8 +397,8 @@ export default function AudiencesPage() {
 
     // Simplified UI rendering block based on reference project port
     return (
-        <div className="py-6 px-4">
-            <div className="mb-6">
+        <div className="py-8 px-4 h-full overflow-y-auto">
+            <div className="mb-6 invisible h-0 overflow-hidden">
                 <h1 className="text-2xl font-bold flex items-center gap-2">
                     <Users className="h-6 w-6 text-indigo-500" />
                     กลุ่มเป้าหมาย (Custom Audiences)
@@ -374,21 +406,8 @@ export default function AudiencesPage() {
                 <p className="text-muted-foreground mt-1">เครื่องมือสร้างและจัดการกลุ่มเป้าหมายล่วงหน้า</p>
             </div>
 
-            <div className="flex gap-2 mb-6">
-                <Button variant={activeTab === "engagement" ? "default" : "outline"} onClick={() => setActiveTab("engagement")}>
-                    Engagement
-                </Button>
-                <Button variant={activeTab === "lookalike" ? "default" : "outline"} onClick={() => setActiveTab("lookalike")}>
-                    Lookalike
-                </Button>
-                <Button variant={activeTab === "interest" ? "default" : "outline"} onClick={() => setActiveTab("interest")}>
-                    <Sparkles className="mr-1.5 h-4 w-4" />
-                    Interest (AI)
-                </Button>
-            </div>
-
-            <div className="grid gap-6 max-w-3xl">
-                <Card>
+            <div className="grid gap-6 max-w-3xl mx-auto">
+                <Card className="shadow-sm">
                     <CardHeader>
                         <CardTitle>
                             {activeTab === "engagement" && "สร้าง Engagement Audience"}
@@ -626,10 +645,67 @@ export default function AudiencesPage() {
 
                     </CardContent>
                 </Card>
+
+                {/* Existing Audiences (Engagement/Lookalike only) */}
+                {activeTab !== "interest" && (
+                    <Card className="shadow-sm">
+                        <CardHeader className="py-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-base text-gray-800 dark:text-gray-200">กลุ่มเป้าหมายที่มีอยู่แล้ว</CardTitle>
+                                    <CardDescription className="text-xs">จัดการและดูรายละเอียดกลุ่มเป้าหมายที่เคยสร้างไว้</CardDescription>
+                                </div>
+                                {adAccountIds.length > 0 && (
+                                    <Button variant="outline" size="sm" className="h-8 text-xs px-3" onClick={loadAudiences} disabled={loadingAudiences}>
+                                        {loadingAudiences ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                                        <span className="ml-1.5">รีเฟรช</span>
+                                    </Button>
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {adAccountIds.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">กรุณาเลือกบัญชีโฆษณาก่อน</p>
+                            ) : loadingAudiences ? (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Loader2 className="h-4 w-4 animate-spin" /> กำลังโหลด...
+                                </div>
+                            ) : audiences.length === 0 ? (
+                                <p className="text-sm text-muted-foreground">ไม่พบกลุ่มเป้าหมายในบัญชีที่เลือก</p>
+                            ) : (
+                                <div className="space-y-2">
+                                    {audiences.map((a) => (
+                                        <div key={`${a.accountId}-${a.id}`} className="flex items-center justify-between gap-2 rounded-lg border p-2.5">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{a.name}</p>
+                                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                                    ID: {a.id}
+                                                    {a.accountName && ` · บัญชี: ${a.accountName}`}
+                                                </p>
+                                            </div>
+                                            <div className="flex shrink-0 items-center gap-2">
+                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{a.subtype || "CUSTOM"}</Badge>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                                    onClick={() => setDeleteTarget(a)}
+                                                    disabled={!a.accountId}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
             </div>
 
             {activeTab === "interest" && interestPresets.length > 0 && (
-                <div className="mt-8 max-w-3xl">
+                <div className="mt-8 max-w-3xl mx-auto">
                     <h3 className="font-semibold mb-4 text-lg">Presets ที่บันทึกไว้</h3>
                     <div className="grid gap-4">
                         {interestPresets.map(p => (
@@ -646,6 +722,32 @@ export default function AudiencesPage() {
                     </div>
                 </div>
             )}
+
+            <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>ยืนยันการลบกลุ่มเป้าหมาย?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {deleteTarget && (
+                                <>
+                                    คุณกำลังจะลบกลุ่มเป้าหมาย <strong>{deleteTarget.name}</strong> ใช่หรือไม่?
+                                    การกระทำนี้ไม่สามารถย้อนกลับได้
+                                </>
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => { e.preventDefault(); void handleDelete(); }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={deleting}
+                        >
+                            {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "ลบข้อมูล"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
