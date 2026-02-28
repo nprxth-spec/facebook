@@ -444,6 +444,24 @@ function SettingsContent() {
   };
 
   const syncFacebookPages = async () => {
+    // 10-minute rate limit (600,000 ms) — same as Manager Accounts
+    const lastSyncStr = localStorage.getItem("lastFbPagesSyncTime");
+    if (lastSyncStr) {
+      const lastSync = parseInt(lastSyncStr, 10);
+      const timeRemaining = 600000 - (Date.now() - lastSync);
+      if (timeRemaining > 0) {
+        const minutes = Math.floor(timeRemaining / 60000);
+        const seconds = Math.floor((timeRemaining % 60000) / 1000);
+        toast.info(
+          isThai
+            ? `ใช้ข้อมูลล่าสุด (ซิงค์ใหม่ได้อีกครั้งใน ${minutes} นาที ${seconds} วินาที)`
+            : `Cached data used (Can sync again in ${minutes}m ${seconds}s)`
+        );
+        reloadFacebookPages();
+        return;
+      }
+    }
+
     setSyncingPages(true);
     try {
       const res = await fetch("/api/facebook/pages");
@@ -466,6 +484,7 @@ function SettingsContent() {
         )
       );
 
+      localStorage.setItem("lastFbPagesSyncTime", Date.now().toString());
       await reloadFacebookPages();
       toast.success(isThai ? "ดึงเพจจาก Facebook เรียบร้อย" : "Pages synced successfully");
     } catch (e) {
