@@ -20,6 +20,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 // ──── Types ────────────────────────────────────────────────────────────────────
@@ -64,6 +72,7 @@ export default function CreateAutoWizard() {
     const router = useRouter();
 
     const [loading, setLoading] = useState(false);
+    const [showReview, setShowReview] = useState(false);
 
     // ── Data ────
     const [adAccounts, setAdAccounts] = useState<AdAccount[]>([]);
@@ -943,9 +952,106 @@ export default function CreateAutoWizard() {
                 <span>{isThai ? "แคมเปญจะสร้างในสถานะ PAUSED — ไปเปิดใช้งานใน Ads Manager หลังตรวจสอบ" : "Campaigns will be created as PAUSED — activate in Ads Manager after review"}</span>
             </div>
 
-            <Button onClick={handleLaunch} disabled={loading || !adAccountId || !pageId || !hasMedia} size="lg" className="w-full">
-                {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{isThai ? "กำลังสร้าง..." : "Creating..."}</> : <><Rocket className="mr-2 h-4 w-4" />{isThai ? "สร้างแคมเปญ" : "Launch Campaign"}</>}
+            <Button onClick={() => setShowReview(true)} disabled={loading || !adAccountId || !pageId || !hasMedia} size="lg" className="w-full">
+                <Rocket className="mr-2 h-4 w-4" />{isThai ? "รีวิวและสร้างแคมเปญ" : "Review & Launch"}
             </Button>
+
+            {/*  ── Review Dialog ────────────────────────────────────────────────────────  */}
+            <Dialog open={showReview} onOpenChange={setShowReview}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>{isThai ? "ตรวจสอบข้อมูลก่อนสร้างแคมเปญ" : "Review Campaign Details"}</DialogTitle>
+                        <DialogDescription>
+                            {isThai ? "โปรดตรวจสอบความถูกต้องก่อนกดยืนยัน แคมเปญจะถูกสร้างในสถานะ PAUSED" : "Please review before confirming. Campaigns will be created as PAUSED."}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p className="text-muted-foreground font-semibold">Ad Account</p>
+                                <p>{adAccounts.find(a => a.accountId === adAccountId || `act_${a.accountId}` === adAccountId)?.name || adAccountId}</p>
+                            </div>
+                            <div>
+                                <p className="text-muted-foreground font-semibold">Page</p>
+                                <p>{pages.find(p => p.pageId === pageId)?.name || pageId}</p>
+                            </div>
+                            <div>
+                                <p className="text-muted-foreground font-semibold">Objective</p>
+                                <p>{OBJECTIVES.find(o => o.value === campaignObjective)?.th || campaignObjective}</p>
+                            </div>
+                            <div>
+                                <p className="text-muted-foreground font-semibold">Budget (Daily)</p>
+                                <p>฿{dailyBudget}</p>
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p className="text-muted-foreground font-semibold mb-1">Structure</p>
+                                <p>{campaignCount} Campaign(s) × {adSetCount} Ad Set(s) × {adsCount} Ad(s)</p>
+                            </div>
+                            <div>
+                                <p className="text-muted-foreground font-semibold mb-1">Audience</p>
+                                <p>Location: {COUNTRIES.find(c => c.code === targetCountry)?.name} | Age: {ageMin}-{ageMax}</p>
+                                <p className="mt-1">Placements: {placements.join(", ")}</p>
+                            </div>
+                        </div>
+
+                        {/* Ad Copy */}
+                        {(primaryText || headline) && (
+                            <>
+                                <Separator />
+                                <div>
+                                    <p className="text-sm text-muted-foreground font-semibold mb-2">Ad Copy</p>
+                                    {primaryText && <p className="text-sm whitespace-pre-line border rounded p-3 bg-muted/30 mb-2">{primaryText}</p>}
+                                    {headline && <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">Headline: {headline}</p>}
+                                </div>
+                            </>
+                        )}
+
+                        {/* Messenger */}
+                        {placements.includes("messenger") && (
+                            <>
+                                <Separator />
+                                <div>
+                                    <p className="text-sm text-muted-foreground font-semibold mb-2 flex items-center gap-2">
+                                        <MessageCircle className="h-4 w-4 text-blue-500" />
+                                        Messenger Setup
+                                    </p>
+                                    {selectedTemplateId && selectedTemplateId !== "manual" ? (
+                                        <p className="text-sm">Using Template: <span className="font-semibold text-blue-600">{templates.find(t => t.id === selectedTemplateId)?.name || selectedTemplateId}</span></p>
+                                    ) : (
+                                        <div className="border rounded-lg p-3 bg-blue-50/50 dark:bg-blue-900/10">
+                                            <p className="text-sm"><span className="font-medium text-muted-foreground">Greeting:</span> {greeting || "N/A"}</p>
+                                            <div className="mt-2">
+                                                <p className="text-sm font-medium text-muted-foreground">Icebreakers:</p>
+                                                <ul className="list-disc pl-5 text-sm mt-1 space-y-1">
+                                                    {iceBreakers.filter(i => i.question).map((ib, idx) => (
+                                                        <li key={idx} className="text-blue-800 dark:text-blue-300">{ib.question}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowReview(false)} disabled={loading}>
+                            {isThai ? "ยกเลิก" : "Cancel"}
+                        </Button>
+                        <Button onClick={handleLaunch} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
+                            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
+                            {isThai ? "ยืนยันการสร้าง" : "Confirm Launch"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
