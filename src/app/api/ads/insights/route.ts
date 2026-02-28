@@ -91,7 +91,7 @@ export async function GET(req: Request) {
             adsUrl.searchParams.set("ids", chunk.join(","));
             adsUrl.searchParams.set(
               "fields",
-              "id,name,effective_status,configured_status,adset{targeting{geo_locations,age_min,age_max,interests}},adcreatives{image_url,thumbnail_url,object_story_spec{page_id,link_data{picture},video_data{image_url},photo_data{url}}}"
+              "id,name,effective_status,configured_status,adset{targeting{geo_locations,age_min,age_max,interests}},adcreatives{image_url,thumbnail_url,actor_id,instagram_actor_id,effective_object_story_id,object_story_id,object_story_spec{page_id,link_data{picture},video_data{image_url},photo_data{url}}}"
             );
             adsUrl.searchParams.set("access_token", token);
             chunkPromises.push(
@@ -115,12 +115,22 @@ export async function GET(req: Request) {
     })
   );
 
-  // Bulk fetch page names/usernames
+  // Bulk fetch page names/usernames - Improved extraction
   const uniquePageIds = Array.from(
     new Set(
-      allAds
-        .map((ad) => ad.adcreatives?.data?.[0]?.object_story_spec?.page_id)
-        .filter(Boolean)
+      allAds.flatMap((ad) => {
+        const creatives = ad.adcreatives?.data || [];
+        return creatives.map((c: any) => {
+          // Priority 1: Direct page_id in spec
+          if (c.object_story_spec?.page_id) return String(c.object_story_spec.page_id);
+          // Priority 2: actor_id
+          if (c.actor_id) return String(c.actor_id);
+          // Priority 3: Parse from object_story_id (FORMAT: PAGEID_POSTID)
+          const sid = c.effective_object_story_id || c.object_story_id;
+          if (sid && sid.includes("_")) return sid.split("_")[0];
+          return null;
+        });
+      }).filter(Boolean)
     )
   ) as string[];
 
@@ -168,11 +178,21 @@ export async function GET(req: Request) {
       let pageUsername: string | null = null;
 
       if (creative) {
-        pageId = creative.object_story_spec?.page_id ?? null;
-        if (pageId && pagesData[pageId]) {
-          pageName = pagesData[pageId].name || null;
-          pageUsername = pagesData[pageId].username || null;
+        // Find pageId from fallbacks
+        const creatives = ad.adcreatives?.data || [];
+        for (const c of creatives) {
+          const pid = c.object_story_spec?.page_id ||
+            c.actor_id ||
+            (c.effective_object_story_id || c.object_story_id || "").split("_")[0];
+
+          if (pid && pagesData[pid]) {
+            pageId = String(pid);
+            pageName = pagesData[pid].name || null;
+            pageUsername = pagesData[pid].username || null;
+            break;
+          }
         }
+
         picture =
           creative.image_url ||
           creative.thumbnail_url ||
