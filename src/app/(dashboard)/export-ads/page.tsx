@@ -44,7 +44,7 @@ const DEFAULT_MAPPING: ColMap[] = [
     { fbCol: "page_id", sheetCol: "B" },  // B
     { fbCol: SKIP, sheetCol: "C" },  // C skip
     { fbCol: SKIP, sheetCol: "D" },  // D skip
-    { fbCol: "creative_name", sheetCol: "E" },  // E ชื่อสื่อ
+    { fbCol: "ad_name", sheetCol: "E" },  // E ชื่อโฆษณา
     { fbCol: SKIP, sheetCol: "F" },  // F skip
     { fbCol: "account_name", sheetCol: "G" },  // G
     { fbCol: "sex", sheetCol: "H" },  // H

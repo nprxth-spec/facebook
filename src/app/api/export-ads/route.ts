@@ -36,7 +36,7 @@ async function fetchAdsInfo(accountId: string, token: string): Promise<Record<st
         "status",
         "effective_status",
         "creative{name,object_story_spec,body,image_url}",
-        "adset{daily_budget,lifetime_budget,targeting{age_min,age_max,genders,interests,excluded_custom_audiences}}",
+        "adset{daily_budget,lifetime_budget,targeting_optimization_types,targeting{age_min,age_max,age_range,genders,interests,flexible_spec,excluded_custom_audiences,excluded_dynamic_audience}}",
         "campaign{name,objective}",
     ].join(",");
 
@@ -61,7 +61,7 @@ async function fetchAdsInfo(accountId: string, token: string): Promise<Record<st
     return rows;
 }
 
-/** แปลงข้อมูล targeting → text */
+/** แปลงข้อมูล targeting → text (รองรับ Advantage+ audience) */
 function parseTargeting(adset: Record<string, unknown> | undefined) {
     if (!adset) return { sex: "", age: "", interests: "" };
 
@@ -74,16 +74,43 @@ function parseTargeting(adset: Record<string, unknown> | undefined) {
     if (genders?.includes(1) && !genders.includes(2)) sex = "Male";
     else if (genders?.includes(2) && !genders.includes(1)) sex = "Female";
 
-    // Age
-    const ageMin = targeting.age_min as number | undefined;
-    const ageMax = targeting.age_max as number | undefined;
+    // Age — regular targeting
+    let ageMin = targeting.age_min as number | undefined;
+    let ageMax = targeting.age_max as number | undefined;
+
+    // Advantage+ Audience ใช้ age_range: [min, max]
+    const ageRange = targeting.age_range as number[] | undefined;
+    if (Array.isArray(ageRange) && ageRange.length === 2) {
+        ageMin = ageRange[0];
+        ageMax = ageRange[1];
+    }
+
+    // flexible_spec (Advantage+ หรือ detailed targeting)
+    const flexibleSpec = targeting.flexible_spec as Array<Record<string, unknown>> | undefined;
+    if (flexibleSpec) {
+        flexibleSpec.forEach((spec) => {
+            if (spec.age_min !== undefined) ageMin = spec.age_min as number;
+            if (spec.age_max !== undefined) ageMax = spec.age_max as number;
+        });
+    }
+
     const age = ageMin || ageMax ? `${ageMin ?? 18}-${ageMax ?? "65+"}` : "";
 
-    // Interests
-    const interests = targeting.interests as Array<{ name: string }> | undefined;
-    const interestText = interests?.map((i) => i.name).join(", ") ?? "";
+    // Interests — top-level + flexible_spec ทั้งคู่
+    let interestList: string[] = (targeting.interests as Array<{ name: string }> | undefined)
+        ?.map((i) => i.name).filter(Boolean) ?? [];
 
-    return { sex, age, interests: interestText };
+    if (flexibleSpec) {
+        flexibleSpec.forEach((spec) => {
+            const specInterests = spec.interests as Array<{ name: string }> | undefined;
+            if (specInterests) interestList.push(...specInterests.map((i) => i.name).filter(Boolean));
+            const behaviors = spec.behaviors as Array<{ name: string }> | undefined;
+            if (behaviors) interestList.push(...behaviors.map((i) => i.name).filter(Boolean));
+        });
+    }
+    interestList = Array.from(new Set(interestList));
+
+    return { sex, age, interests: interestList.join(", ") };
 }
 
 /** แปลง excluded_custom_audiences → text */
