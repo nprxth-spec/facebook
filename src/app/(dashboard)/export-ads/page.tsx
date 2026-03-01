@@ -34,7 +34,7 @@ const AD_COLUMNS = [
     { key: "budget", label: "Budget" },
     { key: "created_time", label: "วันที่สร้าง (Created)" },
     { key: "captions", label: "Captions" },
-    { key: "status", label: "Status" },
+    { key: "status", label: "สถานะ (Status)" },
 ];
 
 const SHEET_COLS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
@@ -51,7 +51,7 @@ const DEFAULT_MAPPING: ColMap[] = [
     { fbCol: "age", sheetCol: "I" },  // I
     { fbCol: "interests", sheetCol: "J" },  // J
     { fbCol: "excluded_interests", sheetCol: "K" },  // K
-    { fbCol: SKIP, sheetCol: "L" },  // L skip
+    { fbCol: "status", sheetCol: "L" },  // L สถานะ
     { fbCol: SKIP, sheetCol: "M" },  // M skip
     { fbCol: "budget", sheetCol: "N" },  // N
     { fbCol: SKIP, sheetCol: "O" },  // O skip
@@ -336,8 +336,8 @@ export default function ExportAdsPage() {
             if (!res.ok || data.error) throw new Error(data.error ?? "Export failed");
             toast.success(
                 isThai
-                    ? `ส่งออกสำเร็จ ${data.rowCount} แถว${data.skipped ? ` (ข้าม ${data.skipped} รายการที่มีอยู่แล้ว)` : ""}`
-                    : `Exported ${data.rowCount} rows${data.skipped ? ` (skipped ${data.skipped} existing)` : ""}`
+                    ? `ส่งออกสำเร็จ ${data.rowCount} แถว${data.updated ? ` (อัปเดตสถานะ ${data.updated} รายการ)` : ""}`
+                    : `Exported ${data.rowCount} rows${data.updated ? ` (updated ${data.updated} statuses)` : ""}`
             );
         } catch (err: unknown) {
             toast.error((err instanceof Error ? err.message : undefined) ?? "Export failed");

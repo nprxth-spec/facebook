@@ -38,6 +38,7 @@ async function fetchAdsInfo(accountId: string, token: string): Promise<Record<st
         "creative{name,object_story_spec,body,image_url}",
         "adset{daily_budget,lifetime_budget,targeting_optimization_types,targeting{age_min,age_max,age_range,genders,interests,flexible_spec,excluded_custom_audiences}}",
         "campaign{name,objective}",
+        "insights.date_preset(lifetime){spend}"
     ].join(",");
 
     // ดึง account name แยก
@@ -167,6 +168,26 @@ function formatDate(ts: string | undefined): string {
     }
 }
 
+/** หา Custom Status ตามเงื่อนไข */
+function getCustomStatus(ad: Record<string, unknown>): string {
+    const eff = String(ad.effective_status ?? ad.status ?? "").toUpperCase();
+    const insights = ad.insights as { data?: { spend?: string }[] } | undefined;
+    const spend = parseFloat(insights?.data?.[0]?.spend ?? "0");
+    const hasStats = spend > 0;
+
+    if (["ACTIVE"].includes(eff)) return "Active";
+    if (["PENDING_REVIEW", "IN_PROCESS", "PREAPPROVED"].includes(eff)) return "Review";
+    if (["PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"].includes(eff)) return "Ads off";
+    if (["DISAPPROVED"].includes(eff)) return hasStats ? "Inactive(Content)" : "Fail(Content)";
+    if (["WITH_ISSUES", "ADACCOUNT_DISABLED", "CAMPAIGN_GROUP_DISABLED", "NO_CREDIT_CARD_ERROR"].includes(eff)) {
+        return hasStats ? "Inactive(Acc/Page)" : "Fail(Acc/Page)";
+    }
+
+    // Fallback based on hasStats assuming anything else weird is an account level error if not explicitly Active/Paused
+    if (!eff || eff === "UNKNOWN") return "Review"; // Just a fallback, usually FB gives status
+    return eff;
+}
+
 /** ดึงค่า field จาก ad row ตาม fbCol key */
 function getAdFieldValue(ad: Record<string, unknown>, fbCol: string): string {
     const adset = ad.adset as Record<string, unknown> | undefined;
@@ -192,7 +213,7 @@ function getAdFieldValue(ad: Record<string, unknown>, fbCol: string): string {
             const campaign = ad.campaign as Record<string, unknown> | undefined;
             return String(campaign?.name ?? "");
         }
-        case "status": return String(ad.effective_status ?? ad.status ?? "");
+        case "status": return getCustomStatus(ad);
         default: return "";
     }
 }
@@ -238,62 +259,91 @@ export async function POST(req: Request) {
         // ── Google Sheets ────────────────────────────────────────────────────
         const sheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
 
-        // ดึง existing adids จาก column A เพื่อ dedup
+        // ดึง existing adids จาก column A เพื่อ dedup และรู้ว่าอยู่บรรทัดไหน
         const existingRes = await sheetsClient.spreadsheets.values.get({
             spreadsheetId: googleSheetId,
             range: `'${sheetTab}'!A:A`,
         });
-        const existingAdIds = new Set<string>(
-            (existingRes.data.values ?? []).flat().map(String).filter(Boolean)
-        );
+        const existingAdIdsArr = (existingRes.data.values ?? []).map(r => String(r[0] ?? ""));
 
-        // กรอง ad ที่ยังไม่มีใน sheet
-        const newAds = allAds.filter((ad) => {
-            const adId = String(ad.id ?? "");
-            return adId && !existingAdIds.has(adId);
+        const adIdToRow = new Map<string, number>();
+        existingAdIdsArr.forEach((id, idx) => {
+            if (id) adIdToRow.set(id, idx + 1); // sheet is 1-based, array is 0-based
         });
 
-        if (newAds.length === 0) {
-            return NextResponse.json({ success: true, rowCount: 0, skipped: allAds.length });
-        }
+        // แยก ad ใหม่ (append) กับ ad เดิม (update status)
+        const newAds = allAds.filter((ad) => {
+            const adId = String(ad.id ?? "");
+            return adId && !adIdToRow.has(adId);
+        });
 
-        // Build rows
+        const existingAdsToUpdate = allAds.filter((ad) => {
+            const adId = String(ad.id ?? "");
+            return adId && adIdToRow.has(adId);
+        });
+
         const activeMappings = columnMapping.filter((m) => m.sheetCol && m.fbCol && m.fbCol !== SKIP_COL);
         const sortedMappings = [...activeMappings].sort((a, b) => colLetterToIndex(a.sheetCol) - colLetterToIndex(b.sheetCol));
 
-        // หา start row — ต่อ row สุดท้ายเสมอ
-        const lastRow = (existingRes.data.values?.length ?? 1);
-        const startRow = lastRow + 1;
+        const batchUpdateRequests: any[] = [];
 
-        // Build range groups (contiguous columns)
-        type RangeGroup = { startCol: string; endCol: string; fbCols: string[] };
-        const groups: RangeGroup[] = [];
-        for (const m of sortedMappings) {
-            if (!groups.length) {
-                groups.push({ startCol: m.sheetCol, endCol: m.sheetCol, fbCols: [m.fbCol] });
-            } else {
-                const last = groups[groups.length - 1];
-                const lastIdx = colLetterToIndex(last.endCol);
-                const thisIdx = colLetterToIndex(m.sheetCol);
-                if (thisIdx === lastIdx + 1) {
-                    last.endCol = m.sheetCol;
-                    last.fbCols.push(m.fbCol);
-                } else {
+        // --- ส่วนที่ 1: Insert แถวใหม่ ---
+        if (newAds.length > 0) {
+            // หา start row — ต่อ row สุดท้ายเสมอ
+            const lastRow = existingAdIdsArr.length || 1;
+            const startRow = lastRow + 1;
+
+            // Build range groups (contiguous columns)
+            type RangeGroup = { startCol: string; endCol: string; fbCols: string[] };
+            const groups: RangeGroup[] = [];
+            for (const m of sortedMappings) {
+                if (!groups.length) {
                     groups.push({ startCol: m.sheetCol, endCol: m.sheetCol, fbCols: [m.fbCol] });
+                } else {
+                    const last = groups[groups.length - 1];
+                    const lastIdx = colLetterToIndex(last.endCol);
+                    const thisIdx = colLetterToIndex(m.sheetCol);
+                    if (thisIdx === lastIdx + 1) {
+                        last.endCol = m.sheetCol;
+                        last.fbCols.push(m.fbCol);
+                    } else {
+                        groups.push({ startCol: m.sheetCol, endCol: m.sheetCol, fbCols: [m.fbCol] });
+                    }
                 }
+            }
+
+            const dataEntries = groups.map((g) => ({
+                range: `'${sheetTab}'!${g.startCol}${startRow}:${g.endCol}${startRow + newAds.length - 1}`,
+                values: newAds.map((ad) =>
+                    g.fbCols.map((fbCol) => getAdFieldValue(ad, fbCol))
+                ),
+            }));
+            batchUpdateRequests.push(...dataEntries);
+        }
+
+        // --- ส่วนที่ 2: Update status แถวเดิม ---
+        if (existingAdsToUpdate.length > 0) {
+            const statusCol = activeMappings.find(m => m.fbCol === "status")?.sheetCol;
+            if (statusCol) {
+                const updateEntries = existingAdsToUpdate.map(ad => {
+                    const rowNum = adIdToRow.get(String(ad.id));
+                    const newStatus = getAdFieldValue(ad, "status");
+                    return {
+                        range: `'${sheetTab}'!${statusCol}${rowNum}`,
+                        values: [[newStatus]]
+                    };
+                });
+                batchUpdateRequests.push(...updateEntries);
             }
         }
 
-        const dataEntries = groups.map((g) => ({
-            range: `'${sheetTab}'!${g.startCol}${startRow}:${g.endCol}${startRow + newAds.length - 1}`,
-            values: newAds.map((ad) =>
-                g.fbCols.map((fbCol) => getAdFieldValue(ad, fbCol))
-            ),
-        }));
+        if (batchUpdateRequests.length === 0) {
+            return NextResponse.json({ success: true, rowCount: 0, skipped: allAds.length, updated: 0 });
+        }
 
         await sheetsClient.spreadsheets.values.batchUpdate({
             spreadsheetId: googleSheetId,
-            requestBody: { valueInputOption: "USER_ENTERED", data: dataEntries },
+            requestBody: { valueInputOption: "USER_ENTERED", data: batchUpdateRequests },
         });
 
         // Log
@@ -318,6 +368,7 @@ export async function POST(req: Request) {
             success: true,
             rowCount: newAds.length,
             skipped: allAds.length - newAds.length,
+            updated: existingAdsToUpdate.length,
         });
     } catch (err: unknown) {
         console.error("[export-ads] Error:", err);
