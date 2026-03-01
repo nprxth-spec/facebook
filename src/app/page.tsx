@@ -108,12 +108,10 @@ export default function LandingPage() {
       <nav className="fixed top-0 w-full z-50 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl shadow-sm dark:bg-slate-950/80 dark:border-white/10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-500 to-cyan-400 flex items-center justify-center shadow-[0_12px_30px_rgba(37,99,235,0.35)]">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
+            <img src="/centxo-logo.png" alt="Centxo Logo" className="w-8 h-8 object-contain" />
             <div className="flex flex-col leading-tight">
               <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">
-                AdSync
+                Centxo
               </span>
               <span className="text-[11px] text-slate-500 dark:text-slate-400">
                 Facebook Ads → Google Sheets
@@ -244,7 +242,7 @@ export default function LandingPage() {
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  AdSync
+                  Centxo
                 </span>
               </div>
               <div className="p-5 space-y-4">
@@ -329,13 +327,11 @@ export default function LandingPage() {
       <footer className="border-t border-gray-200 dark:border-gray-800 py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-gray-900 dark:text-white">AdSync</span>
+            <img src="/centxo-logo.png" alt="Centxo Logo" className="w-7 h-7 object-contain" />
+            <span className="font-bold text-gray-900 dark:text-white">Centxo</span>
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {isThai ? "© 2026 AdSync. สงวนลิขสิทธิ์ทั้งหมด" : "© 2026 AdSync. All rights reserved."}
+            {isThai ? "© 2026 Centxo. สงวนลิขสิทธิ์ทั้งหมด" : "© 2026 Centxo. All rights reserved."}
           </p>
         </div>
       </footer>

@@ -8,7 +8,7 @@ export default function PrivacyPage() {
       <div className="w-full max-w-3xl rounded-3xl bg-white/95 dark:bg-slate-900 shadow-[0_18px_60px_rgba(15,23,42,0.16)] border border-slate-100/90 dark:border-slate-800 px-6 sm:px-10 py-8 space-y-6">
         <header className="space-y-1">
           <p className="text-xs text-slate-400 uppercase tracking-[0.2em]">
-            AdSync
+            Centxo
           </p>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-50">
             นโยบายความเป็นส่วนตัว (Privacy Policy)
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
           <Link href="/" className="hover:text-slate-700 dark:hover:text-slate-200">
             ← กลับหน้าหลัก
           </Link>
-          <span>© {new Date().getFullYear()} AdSync</span>
+          <span>© {new Date().getFullYear()} Centxo</span>
         </footer>
       </div>
     </div>

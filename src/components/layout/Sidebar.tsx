@@ -77,17 +77,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <div className={cn("flex items-center h-16 px-4 border-b border-gray-200 dark:border-gray-700", collapsed ? "justify-center" : "justify-between")}>
           {!collapsed && (
             <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Zap className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-bold text-gray-900 dark:text-white text-lg">AdSync</span>
+              <img src="/centxo-logo.png" alt="Centxo Logo" className="w-8 h-8 object-contain" />
+              <span className="font-bold text-gray-900 dark:text-white text-lg">Centxo</span>
             </Link>
           )}
           {collapsed && (
             <Link href="/dashboard">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Zap className="w-5 h-5 text-white" />
-              </div>
+              <img src="/centxo-logo.png" alt="Centxo Logo" className="w-8 h-8 object-contain" />
             </Link>
           )}
         </div>

@@ -361,6 +361,7 @@ export async function POST(req: Request) {
                 rowCount: newAds.length,
                 dataDate: new Date(),
                 status: "success",
+                details: batchUpdateRequests as any,
             },
         });
 

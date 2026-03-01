@@ -99,6 +99,7 @@ export async function GET(req: Request) {
               // Map 'id' to 'ad_id' and 'name' to 'ad_name' so old mapping works
               ad_id: ad.id,
               ad_name: ad.name,
+              account_id: acc.accountId,
             };
           });
           allAds.push(...chunk);

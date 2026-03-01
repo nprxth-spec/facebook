@@ -34,11 +34,9 @@ export default function LoginPage() {
       <header className="absolute top-4 left-0 w-full">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-500 to-cyan-400 flex items-center justify-center shadow-[0_12px_30px_rgba(37,99,235,0.35)]">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
+            <img src="/centxo-logo.png" alt="Centxo Logo" className="w-8 h-8 object-contain" />
             <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-              AdSync
+              Centxo
             </span>
           </Link>
         </div>
@@ -50,7 +48,7 @@ export default function LoginPage() {
           {/* Heading */}
           <div className="text-center mb-5">
             <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-              {isThai ? "ยินดีต้อนรับสู่ AdSync" : "Welcome to AdSync"}
+              {isThai ? "ยินดีต้อนรับสู่ Centxo" : "Welcome to Centxo"}
             </h1>
             <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
               {isThai

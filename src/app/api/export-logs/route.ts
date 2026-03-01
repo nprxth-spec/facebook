@@ -58,6 +58,13 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "desc" },
       skip,
       take: limit,
+      select: {
+        id: true, userId: true, configId: true, configName: true,
+        exportType: true, sheetFileName: true, sheetTabName: true,
+        adAccountCount: true, rowCount: true, dataDate: true,
+        status: true, error: true, createdAt: true,
+        // specifically NOT selecting `details` JSON here to keep payload small
+      }
     }),
     prisma.exportLog.count({ where }),
   ]);

@@ -11,7 +11,7 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AdSync - Facebook Ads to Google Sheets",
+  title: "Centxo - Facebook Ads to Google Sheets",
   description: "Export your Facebook Ads data directly to Google Sheets",
 };
 

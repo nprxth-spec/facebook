@@ -288,6 +288,7 @@ export async function runExportTask(options: ExportServiceOptions) {
     let totalRows = 0;
     let logStatus = "success";
     let logError: string | undefined;
+    let exportDetails: any = null;
 
     try {
         const allFbRows: Record<string, unknown>[] = [];
@@ -373,6 +374,8 @@ export async function runExportTask(options: ExportServiceOptions) {
             };
         });
 
+        exportDetails = dataEntries;
+
         if (writeMode === "overwrite") {
             // Clear existing data first, but ONLY for the columns we are writing to
             // This preserves formulas in skipped columns
@@ -427,6 +430,7 @@ export async function runExportTask(options: ExportServiceOptions) {
             dataDate: logDate,
             status: logStatus,
             error: logError,
+            details: exportDetails,
         },
     });
 

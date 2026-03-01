@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
     Search, ChevronDown, Check, X, Loader2, AlertCircle,
-    FileSpreadsheet, Upload, Info,
+    FileSpreadsheet, Upload, Info, FileClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -349,18 +350,27 @@ export default function ExportAdsPage() {
     return (
         <div className="p-6 max-w-4xl mx-auto space-y-6">
             {/* Header */}
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                    <FileSpreadsheet className="w-5 h-5 text-green-600 dark:text-green-400" />
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                        <FileSpreadsheet className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                            {isThai ? "ส่งออกข้อมูลโฆษณา" : "Export Ads Info"}
+                        </h1>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                            {isThai ? "ส่งออกข้อมูลโฆษณา (targeting, budget, caption) ไปยัง Google Sheets" : "Export ad details (targeting, budget, captions) to Google Sheets"}
+                        </p>
+                    </div>
                 </div>
-                <div>
-                    <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                        {isThai ? "ส่งออกข้อมูลโฆษณา" : "Export Ads Info"}
-                    </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {isThai ? "ส่งออกข้อมูลโฆษณา (targeting, budget, caption) ไปยัง Google Sheets" : "Export ad details (targeting, budget, captions) to Google Sheets"}
-                    </p>
-                </div>
+                <Link
+                    href="/export/logs"
+                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-colors"
+                >
+                    <FileClock className="w-4 h-4" />
+                    {isThai ? "ประวัติส่งออก" : "Export Logs"}
+                </Link>
             </div>
 
             {/* Info Banner */}

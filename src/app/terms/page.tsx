@@ -8,19 +8,19 @@ export default function TermsPage() {
       <div className="w-full max-w-3xl rounded-3xl bg-white/95 dark:bg-slate-900 shadow-[0_18px_60px_rgba(15,23,42,0.16)] border border-slate-100/90 dark:border-slate-800 px-6 sm:px-10 py-8 space-y-6">
         <header className="space-y-1">
           <p className="text-xs text-slate-400 uppercase tracking-[0.2em]">
-            AdSync
+            Centxo
           </p>
           <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-50">
             เงื่อนไขการใช้งาน (Terms of Service)
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            สรุปข้อกำหนดหลักในการใช้งานระบบ AdSync
+            สรุปข้อกำหนดหลักในการใช้งานระบบ Centxo
           </p>
         </header>
 
         <div className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
           <p>
-            การใช้งานบริการ AdSync ถือว่าคุณยอมรับเงื่อนไขการใช้งานนี้ โดยคุณตกลงว่าจะ
+            การใช้งานบริการ Centxo ถือว่าคุณยอมรับเงื่อนไขการใช้งานนี้ โดยคุณตกลงว่าจะ
             ใช้งานระบบตามกฎหมายที่เกี่ยวข้อง และไม่ทำการใช้งานที่อาจสร้างความเสียหาย
             ต่อระบบหรือบุคคลอื่น
           </p>
@@ -38,7 +38,7 @@ export default function TermsPage() {
           <Link href="/" className="hover:text-slate-700 dark:hover:text-slate-200">
             ← กลับหน้าหลัก
           </Link>
-          <span>© {new Date().getFullYear()} AdSync</span>
+          <span>© {new Date().getFullYear()} Centxo</span>
         </footer>
       </div>
     </div>

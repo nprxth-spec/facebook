@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -11,6 +11,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   Calendar,
   ChevronLeft,
   ChevronRight,
@@ -26,6 +29,21 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { Settings2 } from "lucide-react";
 import {
   addMonths,
   eachDayOfInterval,
@@ -392,11 +410,126 @@ export default function AdsPage() {
 
   const [ads, setAds] = useState<AdRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+
   const [search, setSearch] = useState("");
-  const [fromDateCustom, setFromDateCustom] = useState<Date | null>(new Date());
-  const [toDateCustom, setToDateCustom] = useState<Date | null>(new Date());
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [fromDateCustom, setFromDateCustom] = useState<Date | null>(null);
+  const [toDateCustom, setToDateCustom] = useState<Date | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<string>("all");
+  const [visibleColumns, setVisibleColumns] = useState({
+    account: true,
+    adName: true,
+    page: true,
+    targeting: true,
+    status: true,
+    result: true,
+    spend: true,
+    cpr: true,
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedSearch = localStorage.getItem("ads_search");
+      if (savedSearch) {
+        setSearch(savedSearch);
+        setDebouncedSearch(savedSearch);
+      }
+
+      const savedFrom = localStorage.getItem("ads_fromDate");
+      const savedTo = localStorage.getItem("ads_toDate");
+
+      const initialFrom = savedFrom ? new Date(savedFrom) : subDays(new Date(), 6);
+      const initialTo = savedTo ? new Date(savedTo) : new Date();
+
+      setFromDateCustom(initialFrom);
+      setToDateCustom(initialTo);
+
+      const savedAccount = localStorage.getItem("ads_selectedAccount");
+      if (savedAccount) setSelectedAccount(savedAccount);
+
+      const savedCols = localStorage.getItem("ads_visibleColumns");
+      if (savedCols) {
+        try {
+          setVisibleColumns(prev => ({ ...prev, ...JSON.parse(savedCols) }));
+        } catch (e) { }
+      }
+
+      setIsHydrated(true);
+      fetchAds(initialFrom, initialTo, false, savedSearch || "");
+    }
+  }, []);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Refetch when filters change (after hydration)
+  useEffect(() => {
+    if (!isHydrated) return;
+    fetchAds();
+  }, [debouncedSearch, selectedAccount, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (fromDateCustom) {
+      localStorage.setItem("ads_fromDate", fromDateCustom.toISOString());
+    } else {
+      localStorage.removeItem("ads_fromDate");
+    }
+  }, [fromDateCustom, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (toDateCustom) {
+      localStorage.setItem("ads_toDate", toDateCustom.toISOString());
+    } else {
+      localStorage.removeItem("toDateCustom");
+    }
+  }, [toDateCustom, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    localStorage.setItem("ads_search", search);
+  }, [search, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    localStorage.setItem("ads_selectedAccount", selectedAccount);
+  }, [selectedAccount, isHydrated]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    localStorage.setItem("ads_visibleColumns", JSON.stringify(visibleColumns));
+  }, [visibleColumns, isHydrated]);
+
   const [showCal, setShowCal] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: "asc" | "desc" } | null>({ key: "status", direction: "asc" });
+
+  const hasMounted = useRef(false);
   const calRef = useRef<HTMLDivElement | null>(null);
+
+  const [managerAccounts, setManagerAccounts] = useState<{ id: string; name: string }[]>([]);
+
+  const filteredAds = useMemo(() => {
+    return ads.filter(ad => selectedAccount === "all" || ad.accountId === selectedAccount);
+  }, [ads, selectedAccount]);
+
+  const handleSort = (key: string) => {
+    let direction: "asc" | "desc" = "desc";
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === "desc") {
+      direction = "asc";
+    } else if (sortConfig && sortConfig.key === key && sortConfig.direction === "asc") {
+      setSortConfig(null);
+      return;
+    }
+    setSortConfig({ key, direction });
+  };
+
   const handleRefresh = () => {
     if (loading) return;
     fetchAds(undefined, undefined, true);
@@ -405,7 +538,8 @@ export default function AdsPage() {
   const fetchAds = async (
     overrideFrom?: Date | null,
     overrideTo?: Date | null,
-    forceRefresh: boolean = false
+    forceRefresh: boolean = false,
+    overrideSearch?: string
   ) => {
     setLoading(true);
     try {
@@ -414,6 +548,7 @@ export default function AdsPage() {
 
       const effFrom = overrideFrom ?? fromDateCustom;
       const effTo = overrideTo ?? toDateCustom;
+      const effSearch = overrideSearch ?? debouncedSearch;
 
       if (effFrom && effTo) {
         fromDate = effFrom;
@@ -423,7 +558,7 @@ export default function AdsPage() {
         toDate = effFrom;
       } else {
         toDate = new Date();
-        fromDate = subDays(toDate, 6); // 7 วันรวมวันนี้
+        fromDate = subDays(toDate, 6);
       }
 
       const from = format(fromDate, "yyyy-MM-dd");
@@ -433,7 +568,7 @@ export default function AdsPage() {
         from,
         to,
       });
-      if (search.trim()) params.set("search", search.trim());
+      if (effSearch.trim()) params.set("search", effSearch.trim());
       if (forceRefresh) params.set("refresh", "true");
 
       const res = await fetch(`/api/ads/insights?${params.toString()}`);
@@ -454,7 +589,23 @@ export default function AdsPage() {
   };
 
   useEffect(() => {
-    fetchAds();
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      // fetchAds is now handled by the [debouncedSearch, selectedAccount, isHydrated] effect
+    }
+
+    fetch("/api/manager-accounts")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setManagerAccounts(
+            data
+              .filter((a: any) => a.isActive)
+              .map((a: any) => ({ id: a.accountId, name: a.name }))
+          );
+        }
+      })
+      .catch(console.error);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -471,19 +622,43 @@ export default function AdsPage() {
   const formatCurrency = (v: number | null | undefined) =>
     (Number(v) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
-  const formatStatus = (s: string) => {
-    const k = s.toLowerCase();
-    if (k.includes("active")) return isThai ? "กำลังรัน" : "Active";
-    if (k.includes("paused")) return isThai ? "หยุดชั่วคราว" : "Paused";
-    if (k.includes("deleted")) return isThai ? "ลบแล้ว" : "Deleted";
-    return s;
+  const formatStatus = (s: string, spend: number) => {
+    const k = s.toUpperCase();
+    const hasStats = spend > 0;
+
+    if (["ACTIVE"].includes(k) || k === "ACTIVE") return isThai ? "กำลังใช้งาน" : "Active";
+    if (["PENDING_REVIEW", "IN_PROCESS", "PREAPPROVED"].includes(k)) return isThai ? "กำลังตรวจสอบ" : "Review";
+    if (["PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"].includes(k)) return isThai ? "ปิดโฆษณา/หยุดชั่วคราว" : "Ads off";
+    if (["DISAPPROVED"].includes(k)) {
+      return hasStats
+        ? (isThai ? "ถูกปฏิเสธ (Inactive)" : "Inactive(Content)")
+        : (isThai ? "ถูกปฏิเสธ" : "Fail(Content)");
+    }
+    if (["WITH_ISSUES", "ADACCOUNT_DISABLED", "CAMPAIGN_GROUP_DISABLED", "NO_CREDIT_CARD_ERROR"].includes(k)) {
+      return hasStats
+        ? (isThai ? "เกิดข้อผิดพลาดในการแสดงโฆษณา (Inactive)" : "Inactive(Acc/Page)")
+        : (isThai ? "เกิดข้อผิดพลาดในการแสดงโฆษณา" : "Fail(Acc/Page)");
+    }
+    if (["DELETED", "ARCHIVED"].includes(k)) return isThai ? "ลบแล้ว" : "Deleted";
+
+    // Fallback original parsing just in case
+    const low = s.toLowerCase();
+    if (low.includes("active")) return isThai ? "กำลังใช้งาน" : "Active";
+    if (low.includes("paused")) return isThai ? "ปิดโฆษณา/หยุดชั่วคราว" : "Ads off";
+    if (low.includes("deleted")) return isThai ? "ลบแล้ว" : "Deleted";
+
+    return s || "Review";
   };
 
-  const getStatusColor = (s: string) => {
-    const k = s.toLowerCase();
-    if (k.includes("active")) return "bg-green-500";
-    if (k.includes("paused")) return "bg-yellow-500";
-    if (k.includes("deleted")) return "bg-red-500";
+  const getStatusColor = (s: string, spend: number) => {
+    const formatted = formatStatus(s, spend);
+    if (formatted.includes("กำลังใช้งาน") || formatted === "Active") return "bg-green-500";
+    if (formatted.includes("กำลังตรวจสอบ") || formatted === "Review") return "bg-blue-500";
+    if (formatted.includes("ปิดโฆษณา") || formatted === "Ads off") return "bg-gray-400";
+    if (formatted.includes("ถูกปฏิเสธ") || formatted.includes("Fail(Content)")) return "bg-red-500";
+    if (formatted.includes("เกิดข้อผิดพลาด") || formatted.includes("Fail(Acc/Page)")) return "bg-red-500";
+    if (formatted.includes("Inactive")) return "bg-orange-500";
+    if (formatted.includes("ลบแล้ว") || formatted === "Deleted") return "bg-red-700";
     return "bg-slate-400";
   };
 
@@ -503,15 +678,15 @@ export default function AdsPage() {
       <Card>
         {/* ── Filter section ── */}
         <div className="px-6 pt-4 pb-4 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end">
-            <div className="flex-1 space-y-1">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end">
+            <div className="flex-1 space-y-1 relative z-20">
               <label className="text-xs font-medium text-gray-600 dark:text-gray-300">
                 {isThai ? "ค้นหา" : "Search"}
               </label>
               <div className="relative">
                 <Search className="w-4 h-4 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
                 <Input
-                  className="pl-7"
+                  className="pl-7 h-10 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                   placeholder={
                     isThai
                       ? "ชื่อโฆษณา, บัญชี หรือ ID..."
@@ -519,14 +694,29 @@ export default function AdsPage() {
                   }
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      fetchAds();
-                    }
-                  }}
                 />
               </div>
             </div>
+
+            <div className="w-full md:w-56 space-y-1">
+              <label className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                {isThai ? "บัญชีโฆษณา" : "Ad account"}
+              </label>
+              <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                <SelectTrigger className="h-10 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
+                  <SelectValue placeholder={isThai ? "ทั้งหมด" : "All Accounts"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{isThai ? "ทุกบัญชีโฆษณา" : "All Accounts"}</SelectItem>
+                  {managerAccounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id}>
+                      {acc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="w-full md:w-64 space-y-1" ref={calRef}>
               <label className="text-xs font-medium text-gray-600 dark:text-gray-300">
                 {isThai ? "ช่วงวันที่ข้อมูล" : "Data date range"}
@@ -571,13 +761,49 @@ export default function AdsPage() {
                 )}
               </div>
             </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="h-10 px-3 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-normal">
+                  <Settings2 className="w-4 h-4 mr-2" />
+                  {isThai ? "คอลัมน์" : "Columns"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuCheckboxItem checked={visibleColumns.account} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, account: !!v }))}>
+                  {isThai ? "บัญชีโฆษณา" : "Ad account"}
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={visibleColumns.adName} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, adName: !!v }))}>
+                  {isThai ? "ชื่อโฆษณา" : "Ad name"}
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={visibleColumns.page} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, page: !!v }))}>
+                  {isThai ? "เพจ" : "Page"}
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={visibleColumns.targeting} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, targeting: !!v }))}>
+                  {isThai ? "กลุ่มเป้าหมาย" : "Targeting"}
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={visibleColumns.status} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, status: !!v }))}>
+                  {isThai ? "สถานะ" : "Status"}
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={visibleColumns.result} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, result: !!v }))}>
+                  {isThai ? "ผลลัพธ์" : "Results"}
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={visibleColumns.spend} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, spend: !!v }))}>
+                  {isThai ? "ยอดใช้จ่าย" : "Spend"}
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={visibleColumns.cpr} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, cpr: !!v }))}>
+                  {isThai ? "ต้นทุนต่อผลลัพธ์" : "CPR"}
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <button
               onClick={handleRefresh}
               disabled={loading}
               className="flex h-10 items-center justify-center gap-2 px-4 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 transition-colors"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-primary" : ""}`} />
-              {isThai ? "รีเฟรชข้อมูล" : "Refresh"}
+              {isThai ? "รีเฟรช" : "Refresh"}
             </button>
           </div>
         </div>
@@ -588,7 +814,7 @@ export default function AdsPage() {
             {isThai ? "ผลลัพธ์โฆษณา" : "Ads results"}
           </span>
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            {isThai ? `${ads.length.toLocaleString()} รายการ` : `${ads.length.toLocaleString()} ads`}
+            {isThai ? `${filteredAds.length.toLocaleString()} รายการ` : `${filteredAds.length.toLocaleString()} ads`}
           </span>
         </div>
         <CardContent className="p-0">
@@ -596,7 +822,7 @@ export default function AdsPage() {
             <div className="flex items-center justify-center py-10">
               <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
             </div>
-          ) : !ads.length ? (
+          ) : !filteredAds.length ? (
             <div className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
               {isThai
                 ? "ไม่พบโฆษณาตามเงื่อนไขที่เลือก"
@@ -610,34 +836,95 @@ export default function AdsPage() {
                     <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                       #
                     </th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                      {isThai ? "บัญชีโฆษณา" : "Ad account"}
-                    </th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                      {isThai ? "ชื่อโฆษณา" : "Ad"}
-                    </th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                      {isThai ? "เพจ" : "Page"}
-                    </th>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[180px]">
-                      {isThai ? "กลุ่มเป้าหมาย" : "Targeting"}
-                    </th>
-                    <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                      {isThai ? "สถานะ" : "Status"}
-                    </th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                      {isThai ? "ผลลัพธ์" : "Results"}
-                    </th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                      {isThai ? "ค่าใช้จ่าย" : "Spend"}
-                    </th>
-                    <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                      {isThai ? "ต้นทุนต่อผลลัพธ์" : "Cost / result"}
-                    </th>
+                    {visibleColumns.account && (
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                        {isThai ? "บัญชีโฆษณา" : "Ad account"}
+                      </th>
+                    )}
+                    {visibleColumns.adName && (
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                        {isThai ? "ชื่อโฆษณา" : "Ad"}
+                      </th>
+                    )}
+                    {visibleColumns.page && (
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                        {isThai ? "เพจ" : "Page"}
+                      </th>
+                    )}
+                    {visibleColumns.targeting && (
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[180px]">
+                        {isThai ? "กลุ่มเป้าหมาย" : "Targeting"}
+                      </th>
+                    )}
+                    {visibleColumns.status && (
+                      <th
+                        className="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
+                        onClick={() => handleSort("status")}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          {isThai ? "สถานะ" : "Status"}
+                          {sortConfig?.key === "status" ? (
+                            sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
+                          ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
+                        </div>
+                      </th>
+                    )}
+                    {visibleColumns.result && (
+                      <th
+                        className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
+                        onClick={() => handleSort("result")}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          {isThai ? "ผลลัพธ์" : "Results"}
+                          {sortConfig?.key === "result" ? (
+                            sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
+                          ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
+                        </div>
+                      </th>
+                    )}
+                    {visibleColumns.spend && (
+                      <th
+                        className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
+                        onClick={() => handleSort("spend")}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          {isThai ? "ค่าใช้จ่าย" : "Spend"}
+                          {sortConfig?.key === "spend" ? (
+                            sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
+                          ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
+                        </div>
+                      </th>
+                    )}
+                    {visibleColumns.cpr && (
+                      <th
+                        className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
+                        onClick={() => handleSort("cpr")}
+                      >
+                        <div className="flex items-center justify-end gap-1">
+                          {isThai ? "ต้นทุนต่อผลลัพธ์" : "Cost / result"}
+                          {sortConfig?.key === "cpr" ? (
+                            sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
+                          ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
+                        </div>
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {ads.map((ad, idx) => (
+                  {[...filteredAds].sort((a, b) => {
+                    if (!sortConfig) return 0;
+                    const { key, direction } = sortConfig;
+                    const mod = direction === "desc" ? -1 : 1;
+                    if (key === "result") return (a.result - b.result) * mod;
+                    if (key === "spend") return (a.spend - b.spend) * mod;
+                    if (key === "cpr") return (a.costPerResult - b.costPerResult) * mod;
+                    if (key === "status") {
+                      const statA = formatStatus(a.status, a.spend);
+                      const statB = formatStatus(b.status, b.spend);
+                      return statA.localeCompare(statB) * mod;
+                    }
+                    return 0;
+                  }).map((ad, idx) => (
                     <tr
                       key={ad.id}
                       className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
@@ -645,154 +932,170 @@ export default function AdsPage() {
                       <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
                         {idx + 1}
                       </td>
-                      <td className="px-3 py-2">
-                        <a
-                          href={ad.adsManagerUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-primary hover:underline transition-colors block truncate"
-                        >
-                          {ad.accountName}
-                        </a>
-                        <div
-                          className="text-xs text-gray-500 cursor-pointer hover:text-primary transition-colors w-fit mt-0.5"
-                          onClick={() => {
-                            navigator.clipboard.writeText(ad.accountId);
-                            toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
-                          }}
-                        >
-                          {ad.accountId}
-                        </div>
-                      </td>
-                      <td className="p-[1px]">
-                        <div className="flex items-center gap-2">
-                          <div className="w-11 h-11 rounded-sm overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={ad.image}
-                              alt={ad.name}
-                              className="w-full h-full object-cover"
-                            />
+                      {visibleColumns.account && (
+                        <td className="px-3 py-2 text-left">
+                          <a
+                            href={ad.adsManagerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-primary hover:underline transition-colors block truncate"
+                          >
+                            {ad.accountName}
+                          </a>
+                          <div
+                            className="text-xs text-gray-500 cursor-pointer hover:text-primary transition-colors w-fit mt-0.5"
+                            onClick={() => {
+                              navigator.clipboard.writeText(ad.accountId);
+                              toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
+                            }}
+                          >
+                            {ad.accountId}
                           </div>
-                          <div className="min-w-0 py-1 pr-2">
-                            {ad.adPostUrl ? (
-                              <a
-                                href={ad.adPostUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm font-normal text-gray-900 dark:text-gray-100 hover:text-primary hover:underline transition-colors block truncate"
+                        </td>
+                      )}
+                      {visibleColumns.adName && (
+                        <td className="p-[1px]">
+                          <div className="flex items-center gap-2">
+                            <div className="w-11 h-11 rounded-sm overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={ad.image}
+                                alt={ad.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div className="min-w-0 py-1 pr-2">
+                              {ad.adPostUrl ? (
+                                <a
+                                  href={ad.adPostUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm font-normal text-gray-900 dark:text-gray-100 hover:text-primary hover:underline transition-colors block truncate"
+                                >
+                                  {ad.name}
+                                </a>
+                              ) : (
+                                <div className="text-sm font-normal text-gray-900 dark:text-gray-100 truncate">
+                                  {ad.name}
+                                </div>
+                              )}
+                              <div
+                                className="text-xs text-gray-500 cursor-pointer hover:text-primary transition-colors w-fit"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(ad.id);
+                                  toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
+                                }}
                               >
-                                {ad.name}
-                              </a>
-                            ) : (
-                              <div className="text-sm font-normal text-gray-900 dark:text-gray-100 truncate">
-                                {ad.name}
+                                ID: {ad.id}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.page && (
+                        <td className="p-[1px]">
+                          <div className="flex flex-col justify-center h-full min-w-0 py-1 pl-2">
+                            <div className="text-sm font-normal text-gray-900 dark:text-gray-100 truncate">
+                              {ad.pageName ?? (ad.pageId ? `Page ${ad.pageId}` : "—")}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                              {ad.pageUsername ? `@${ad.pageUsername}` : "—"}
+                            </div>
+                            {ad.pageId && (
+                              <div
+                                className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-primary transition-colors w-fit mt-0.5"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(ad.pageId!);
+                                  toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
+                                }}
+                              >
+                                ID: {ad.pageId}
                               </div>
                             )}
-                            <div
-                              className="text-xs text-gray-500 cursor-pointer hover:text-primary transition-colors w-fit"
-                              onClick={() => {
-                                navigator.clipboard.writeText(ad.id);
-                                toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
-                              }}
-                            >
-                              ID: {ad.id}
-                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-[1px]">
-                        <div className="flex flex-col justify-center h-full min-w-0 py-1 pl-2">
-                          <div className="text-sm font-normal text-gray-900 dark:text-gray-100 truncate">
-                            {ad.pageName ?? (ad.pageId ? `Page ${ad.pageId}` : "—")}
+                        </td>
+                      )}
+                      {visibleColumns.targeting && (
+                        <td className="px-3 py-2">
+                          <div className="text-[11px] leading-snug text-gray-700 dark:text-gray-300 space-y-0.5">
+                            {ad.targeting.countries.length > 0 && (
+                              <div>
+                                <span className="font-medium text-gray-500">
+                                  {isThai ? "ประเทศ:" : "Countries:"}{" "}
+                                </span>
+                                {ad.targeting.countries.join(", ")}
+                              </div>
+                            )}
+                            {(ad.targeting.ageMin || ad.targeting.ageMax) && (
+                              <div>
+                                <span className="font-medium text-gray-500">
+                                  {isThai ? "อายุ:" : "Age:"}{" "}
+                                </span>
+                                {ad.targeting.ageMin ?? "?"}–{ad.targeting.ageMax ?? "?"}
+                              </div>
+                            )}
+                            {ad.targeting.interests.length > 0 && (
+                              <div className="flex items-start flex-wrap">
+                                <span className="font-medium text-gray-500 mr-1 whitespace-nowrap">
+                                  {isThai ? "ความสนใจ:" : "Interests:"}{" "}
+                                </span>
+                                <span className="inline-block truncate max-w-[120px]" title={ad.targeting.interests[0]}>
+                                  {ad.targeting.interests[0]}
+                                </span>
+                                {ad.targeting.interests.length > 1 && (
+                                  <Popover>
+                                    <PopoverTrigger className="ml-1 text-[10px] text-primary font-bold hover:underline whitespace-nowrap">
+                                      +{ad.targeting.interests.length - 1} {isThai ? "เพิ่มเติม" : "more"}
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[320px] p-4 z-[60] shadow-xl">
+                                      <div className="font-semibold text-sm mb-3 border-b pb-2 flex justify-between items-center text-gray-900 dark:text-gray-100">
+                                        <span>{isThai ? "ความสนใจทั้งหมด" : "All Interests"}</span>
+                                        <Badge variant="secondary" className="text-[10px] font-bold px-1.5 py-0">{ad.targeting.interests.length}</Badge>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto pr-2">
+                                        {ad.targeting.interests.map((int, i) => (
+                                          <Badge key={i} variant="outline" className="text-xs font-medium px-2 py-0.5 bg-gray-50/50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300">
+                                            {int}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
+                                )}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                            {ad.pageUsername ? `@${ad.pageUsername}` : "—"}
+                        </td>
+                      )}
+                      {visibleColumns.status && (
+                        <td className="px-3 py-2 text-left">
+                          <div className="flex items-center justify-start gap-2 text-[13px] font-medium text-gray-800 dark:text-gray-200">
+                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getStatusColor(ad.status, ad.spend)} shadow-sm`} />
+                            {formatStatus(ad.status, ad.spend)}
                           </div>
-                          {ad.pageId && (
-                            <div
-                              className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-primary transition-colors w-fit mt-0.5"
-                              onClick={() => {
-                                navigator.clipboard.writeText(ad.pageId!);
-                                toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
-                              }}
-                            >
-                              ID: {ad.pageId}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="text-[11px] leading-snug text-gray-700 dark:text-gray-300 space-y-0.5">
-                          {ad.targeting.countries.length > 0 && (
-                            <div>
-                              <span className="font-medium text-gray-500">
-                                {isThai ? "ประเทศ:" : "Countries:"}{" "}
-                              </span>
-                              {ad.targeting.countries.join(", ")}
-                            </div>
-                          )}
-                          {(ad.targeting.ageMin || ad.targeting.ageMax) && (
-                            <div>
-                              <span className="font-medium text-gray-500">
-                                {isThai ? "อายุ:" : "Age:"}{" "}
-                              </span>
-                              {ad.targeting.ageMin ?? "?"}–{ad.targeting.ageMax ?? "?"}
-                            </div>
-                          )}
-                          {ad.targeting.interests.length > 0 && (
-                            <div className="flex items-start flex-wrap">
-                              <span className="font-medium text-gray-500 mr-1 whitespace-nowrap">
-                                {isThai ? "ความสนใจ:" : "Interests:"}{" "}
-                              </span>
-                              <span className="inline-block truncate max-w-[120px]" title={ad.targeting.interests[0]}>
-                                {ad.targeting.interests[0]}
-                              </span>
-                              {ad.targeting.interests.length > 1 && (
-                                <Popover>
-                                  <PopoverTrigger className="ml-1 text-[10px] text-primary font-bold hover:underline whitespace-nowrap">
-                                    +{ad.targeting.interests.length - 1} {isThai ? "เพิ่มเติม" : "more"}
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-[320px] p-4 z-[60] shadow-xl">
-                                    <div className="font-semibold text-sm mb-3 border-b pb-2 flex justify-between items-center text-gray-900 dark:text-gray-100">
-                                      <span>{isThai ? "ความสนใจทั้งหมด" : "All Interests"}</span>
-                                      <Badge variant="secondary" className="text-[10px] font-bold px-1.5 py-0">{ad.targeting.interests.length}</Badge>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto pr-2">
-                                      {ad.targeting.interests.map((int, i) => (
-                                        <Badge key={i} variant="outline" className="text-xs font-medium px-2 py-0.5 bg-gray-50/50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300">
-                                          {int}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  </PopoverContent>
-                                </Popover>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-left">
-                        <div className="flex items-center justify-start gap-1.5 text-xs font-normal text-gray-700 dark:text-gray-300">
-                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getStatusColor(ad.status)}`} />
-                          {formatStatus(ad.status)}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {formatCurrency(ad.result)}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {formatCurrency(ad.spend)}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {formatCurrency(ad.costPerResult)}
-                        </div>
-                      </td>
+                        </td>
+                      )}
+                      {visibleColumns.result && (
+                        <td className="px-3 py-2 text-right">
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {formatCurrency(ad.result)}
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.spend && (
+                        <td className="px-3 py-2 text-right">
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {formatCurrency(ad.spend)}
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.cpr && (
+                        <td className="px-3 py-2 text-right">
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {formatCurrency(ad.costPerResult)}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -800,7 +1103,7 @@ export default function AdsPage() {
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card >
     </div >
   );
 }

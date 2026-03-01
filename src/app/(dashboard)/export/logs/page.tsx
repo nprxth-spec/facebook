@@ -13,9 +13,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   CheckCircle2, XCircle, Clock, Search, RefreshCw,
   FileSpreadsheet, ChevronLeft, ChevronRight, Filter, Calendar, Loader2,
-  ArrowLeft, Check, ChevronDown
+  ArrowLeft, Check, ChevronDown, Eye
 } from "lucide-react";
 import { format } from "date-fns";
 import { th, enUS } from "date-fns/locale";
@@ -55,6 +61,11 @@ export default function ExportLogsPage() {
   const [filterStatus, setFilterStatus] = useState<"all" | "success" | "error">("all");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [mounted, setMounted] = useState(false);
+
+  // Details Modal State
+  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [logDetails, setLogDetails] = useState<any | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const { language } = useTheme();
   const isThai = language === "th";
   const locale = isThai ? th : enUS;
@@ -106,6 +117,22 @@ export default function ExportLogsPage() {
   }, []);
 
   useEffect(() => { fetchLogs(); }, [fetchLogs]);
+
+  const openDetails = async (id: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setSelectedLogId(id);
+    setLogDetails(null);
+    setDetailsLoading(true);
+    try {
+      const res = await fetch(`/api/export-logs/${id}`);
+      const data = await res.json();
+      setLogDetails(data.details);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
 
   if (!mounted) return null;
 
@@ -317,7 +344,8 @@ export default function ExportLogsPage() {
                       { label: "บัญชีโฆษณา", align: "text-center" },
                       { label: "จำนวนแถวที่ส่งออก", align: "text-center" },
                       { label: "วันที่ข้อมูล", align: "text-center" },
-                      { label: "สถานะ", align: "text-left" }
+                      { label: "สถานะ", align: "text-left" },
+                      { label: "", align: "text-right" }
                     ]
                     : [
                       { label: "Date / time", align: "text-left" },
@@ -326,7 +354,8 @@ export default function ExportLogsPage() {
                       { label: "Ad accounts", align: "text-center" },
                       { label: "Exported Rows", align: "text-center" },
                       { label: "Data date", align: "text-center" },
-                      { label: "Status", align: "text-left" }
+                      { label: "Status", align: "text-left" },
+                      { label: "", align: "text-right" }
                     ]
                   ).map((col) => (
                     <th key={col.label} className={cn("px-4 py-3 text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap", col.align)}>
@@ -338,13 +367,13 @@ export default function ExportLogsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center">
+                    <td colSpan={8} className="px-4 py-12 text-center">
                       <Loader2 className="w-6 h-6 text-gray-400 animate-spin mx-auto" />
                     </td>
                   </tr>
                 ) : !data?.logs?.length ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={8} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400">
                       <Filter className="w-8 h-8 mx-auto mb-2 opacity-40" />
                       <p>
                         {search || filterType !== "all" || filterStatus !== "all"
@@ -411,6 +440,11 @@ export default function ExportLogsPage() {
                           </div>
                         )}
                       </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button variant="ghost" size="sm" onClick={(e) => openDetails(log.id, e)} className="h-8 w-8 p-0" title={isThai ? "ดูรายละเอียด" : "View Details"}>
+                          <Eye className="w-4 h-4 text-gray-500 hover:text-primary transition-colors" />
+                        </Button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -452,6 +486,57 @@ export default function ExportLogsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Details Dialog */}
+      <Dialog open={!!selectedLogId} onOpenChange={(open) => !open && setSelectedLogId(null)}>
+        <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>{isThai ? "รายละเอียดข้อมูลที่ส่งออก" : "Exported Data Details"}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mt-2 border border-gray-100 dark:border-gray-800">
+            {detailsLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="w-6 h-6 text-primary animate-spin" />
+              </div>
+            ) : logDetails ? (
+              Array.isArray(logDetails) && logDetails[0]?.range && logDetails[0]?.values ? (
+                <div className="space-y-6">
+                  {logDetails.map((detail: any, idx: number) => (
+                    <div key={idx} className="space-y-2">
+                      <div className="font-semibold text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        {isThai ? "ช่วงข้อมูล:" : "Range:"} <Badge variant="outline" className="font-mono bg-white dark:bg-gray-950">{detail.range}</Badge>
+                      </div>
+                      <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-950 shadow-sm">
+                        <table className="w-full text-xs text-left">
+                          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                            {Array.isArray(detail.values) && detail.values.map((row: any[], rowIdx: number) => (
+                              <tr key={rowIdx} className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
+                                {Array.isArray(row) && row.map((cell: any, cellIdx: number) => (
+                                  <td key={cellIdx} className="px-3 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-400 border-r border-gray-100 dark:border-gray-800 last:border-0 max-w-[250px] truncate" title={String(cell)}>
+                                    {cell !== null && cell !== "" ? String(cell) : <span className="text-gray-300 dark:text-gray-600">-</span>}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <pre className="text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono">
+                  {JSON.stringify(logDetails, null, 2)}
+                </pre>
+              )
+            ) : (
+              <p className="text-gray-500 text-sm text-center py-10">
+                {isThai ? "ไม่พบรายละเอียดเพิ่มเติม" : "No details available"}
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
