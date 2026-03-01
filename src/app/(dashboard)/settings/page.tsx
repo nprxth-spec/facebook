@@ -24,6 +24,7 @@ import { Language } from "@/lib/translations";
 
 interface ManagerAccount { id: string; accountId: string; name: string; platform: string; isActive: boolean }
 interface FacebookPage { id: string; pageId: string; name: string; username?: string | null; pageStatus?: string | null; pictureUrl?: string | null; isActive: boolean }
+interface FbConnection { id: string; providerAccountId: string; name: string | null; email: string | null; picture: string | null; }
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -152,6 +153,11 @@ function SettingsContent() {
   const [syncingPages, setSyncingPages] = useState(false);
   const [pagesPage, setPagesPage] = useState(1);
   const PAGES_PER_PAGE = 10;
+
+  // Facebook connections (Connections tab)
+  const [fbConnections, setFbConnections] = useState<FbConnection[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
 
   const initials = useMemo(() => {
@@ -337,13 +343,45 @@ function SettingsContent() {
     }
   }, [isThai]);
 
+  const reloadFbConnections = useCallback(async () => {
+    setConnectionsLoading(true);
+    try {
+      const res = await fetch("/api/facebook-connections");
+      const data = await res.json();
+      if (Array.isArray(data)) setFbConnections(data);
+    } catch {
+      toast.error(isThai ? "โหลดการเชื่อมต่อ Facebook ไม่สำเร็จ" : "Failed to load Facebook connections");
+    } finally {
+      setConnectionsLoading(false);
+    }
+  }, [isThai]);
+
+  const disconnectFacebook = async (id: string) => {
+    setDisconnecting(id);
+    try {
+      const res = await fetch("/api/facebook-connections", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setFbConnections((prev) => prev.filter((c) => c.id !== id));
+      toast.success(isThai ? "ยกเลิกการเชื่อมต่อ Facebook แล้ว" : "Facebook disconnected");
+    } catch {
+      toast.error(isThai ? "เกิดข้อผิดพลาด" : "Failed to disconnect");
+    } finally {
+      setDisconnecting(null);
+    }
+  };
+
   useEffect(() => {
     if (!session?.user?.id) return; // Wait for session to load
 
     // Reload data when tab changes
     if (activeTab === "manager-accounts") reloadManagerAccounts();
     if (activeTab === "facebook-pages") reloadFacebookPages();
-  }, [reloadManagerAccounts, reloadFacebookPages, activeTab, session?.user?.id]);
+    if (activeTab === "connections") reloadFbConnections();
+  }, [reloadManagerAccounts, reloadFacebookPages, reloadFbConnections, activeTab, session?.user?.id]);
 
   useEffect(() => {
     setAccountsPage(1);
@@ -718,7 +756,7 @@ function SettingsContent() {
 
               {/* Connections */}
               {activeTab === "connections" && (
-                <section className="space-y-4">
+                <section className="space-y-6">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                       {isThai ? "ตั้งค่าการเชื่อมต่อ" : "Connection settings"}
@@ -729,75 +767,146 @@ function SettingsContent() {
                         : "Manage your connected Google and Facebook accounts."}
                     </p>
                   </div>
-                  {[
-                    {
-                      key: "google",
-                      label: "Google",
-                      desc: hasGoogle
-                        ? isThai
-                          ? "เชื่อมต่อแล้ว — ใช้สำหรับ Google Sheets"
-                          : "Connected — used for Google Sheets"
-                        : isThai
-                          ? "ยังไม่ได้เชื่อมต่อ"
-                          : "Not connected yet",
-                      connected: hasGoogle, icon: <GoogleIcon className="w-5 h-5" />, bg: "bg-gray-50 dark:bg-gray-700",
-                    },
-                    {
-                      key: "facebook",
-                      label: "Facebook",
-                      desc: hasFacebook
-                        ? isThai
-                          ? "เชื่อมต่อแล้ว — ใช้สำหรับดึงข้อมูลโฆษณา"
-                          : "Connected — used to fetch ad data"
-                        : isThai
-                          ? "ยังไม่ได้เชื่อมต่อ"
-                          : "Not connected yet",
-                      connected: hasFacebook, icon: <FacebookIcon className="w-5 h-5" />, bg: "bg-primary/10 dark:bg-primary/20",
-                    },
-                  ].map((p) => (
-                    <div key={p.key} className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "w-10 h-10 rounded-xl flex items-center justify-center",
-                          p.key === "facebook" ? "bg-blue-50 dark:bg-blue-900/10" : p.bg
-                        )}>{p.icon}</div>
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-gray-100">{p.label}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">{p.desc}</p>
-                        </div>
+
+                  {/* Google Row */}
+                  <div className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gray-50 dark:bg-gray-700">
+                        <GoogleIcon className="w-5 h-5" />
                       </div>
-                      <div className="flex items-center gap-2">
-                        {p.connected
-                          ? (
-                            <div className="flex items-center gap-2">
-                              {p.key === "facebook" && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 px-3 text-xs"
-                                  onClick={() => signIn("facebook", { callbackUrl: "/settings?tab=connections" })}
-                                >
-                                  {isThai ? "เชื่อมต่ออีกครั้ง" : "Reconnect"}
-                                </Button>
-                              )}
-                              <Badge variant="success" className="gap-1">
-                                <CheckCircle2 className="w-3 h-3" />
-                                {isThai ? "เชื่อมต่อแล้ว" : "Connected"}
-                              </Badge>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => signIn(p.key, { callbackUrl: "/settings" })}
-                            >
-                              {isThai ? "เชื่อมต่อ" : "Connect"}
-                            </Button>
-                          )
-                        }
+                      <div>
+                        <p className="font-medium text-gray-900 dark:text-gray-100">Google</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {hasGoogle
+                            ? isThai ? "เชื่อมต่อแล้ว — ใช้สำหรับ Google Sheets" : "Connected — used for Google Sheets"
+                            : isThai ? "ยังไม่ได้เชื่อมต่อ" : "Not connected yet"}
+                        </p>
                       </div>
                     </div>
-                  ))}
+                    <div className="flex items-center gap-2">
+                      {hasGoogle ? (
+                        <Badge variant="success" className="gap-1">
+                          <CheckCircle2 className="w-3 h-3" />
+                          {isThai ? "เชื่อมต่อแล้ว" : "Connected"}
+                        </Badge>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => signIn("google", { callbackUrl: "/settings?tab=connections" })}>
+                          {isThai ? "เชื่อมต่อ" : "Connect"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Facebook Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50 dark:bg-blue-900/20">
+                          <FacebookIcon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">Facebook</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {isThai
+                              ? `เชื่อมต่ออยู่ ${fbConnections.length} บัญชี`
+                              : `${fbConnections.length} account${fbConnections.length !== 1 ? 's' : ''} connected`}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-3 text-xs gap-1.5 bg-white text-[#1877F2] border-blue-200 hover:bg-blue-50 dark:bg-transparent dark:text-[#9ec5ff] dark:border-blue-800 dark:hover:bg-blue-950/40"
+                        onClick={() => signIn("facebook", { callbackUrl: "/settings?tab=connections" })}
+                      >
+                        <Plus className="w-3 h-3" />
+                        {isThai ? "เพิ่มบัญชี Facebook" : "Add Facebook Account"}
+                      </Button>
+                    </div>
+
+                    {/* Connected Facebook Accounts Table */}
+                    {connectionsLoading ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                      </div>
+                    ) : fbConnections.length === 0 ? (
+                      <div className="text-center py-8 border border-dashed border-gray-200 dark:border-gray-700 rounded-xl">
+                        <FacebookIcon className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {isThai ? "ยังไม่ได้เชื่อมต่อ Facebook" : "No Facebook accounts connected"}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {isThai ? "กดปุ่ม \"เพิ่มบัญชี Facebook\" เพื่อเริ่มต้น" : "Click \"Add Facebook Account\" to get started"}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 dark:bg-gray-800/60">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                {isThai ? "บัญชี Facebook" : "Facebook Account"}
+                              </th>
+                              <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                {isThai ? "อีเมล" : "Email"}
+                              </th>
+
+                              <th className="px-4 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                                {isThai ? "จัดการ" : "Actions"}
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {fbConnections.map((conn) => (
+                              <tr key={conn.id} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors">
+                                <td className="px-4 py-2">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="relative w-8 h-8 shrink-0">
+                                      {conn.picture ? (
+                                        <img src={conn.picture} alt={conn.name ?? ""} className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-gray-700" />
+                                      ) : (
+                                        <div className="w-8 h-8 rounded-full bg-[#1877F2]/10 border border-[#1877F2]/30 flex items-center justify-center text-[#1877F2] text-xs font-bold">
+                                          {(conn.name ?? "F").charAt(0).toUpperCase()}
+                                        </div>
+                                      )}
+                                      <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#1877F2] flex items-center justify-center border border-white dark:border-gray-900">
+                                        <FacebookIcon className="w-2 h-2 text-white" />
+                                      </span>
+                                    </div>
+                                    <div>
+                                      <p className="font-medium text-gray-900 dark:text-gray-100 text-sm">{conn.name ?? "—"}</p>
+                                      <p className="text-xs text-gray-400 font-mono">{conn.providerAccountId}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
+                                  {conn.email ?? "—"}
+                                </td>
+
+                                <td className="px-4 py-2 text-center">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                    disabled={disconnecting === conn.id}
+                                    onClick={() => disconnectFacebook(conn.id)}
+                                  >
+                                    {disconnecting === conn.id ? (
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <X className="w-3 h-3" />
+                                    )}
+                                    <span className="ml-1">{isThai ? "ยกเลิก" : "Disconnect"}</span>
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="p-3 bg-primary/10 dark:bg-primary/20 rounded-lg border border-primary/20 dark:border-primary/30">
                     <div className="flex items-start gap-2">
                       <Shield className="w-4 h-4 text-primary dark:text-primary mt-0.5 shrink-0" />

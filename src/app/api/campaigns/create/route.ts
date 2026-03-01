@@ -118,6 +118,7 @@ export async function POST(req: NextRequest) {
     let iceBreakers: { question: string; payload: string }[] = [];
     try { if (iceBreakersRaw) iceBreakers = JSON.parse(iceBreakersRaw); } catch { /* ignore */ }
     const templateId = (formData.get("templateId") as string) || null;
+    console.log("[Creative Debug] templateId:", templateId, "| greeting:", greeting, "| iceBreakers:", JSON.stringify(iceBreakers));
 
     // Media
     const mediaFile = formData.get("file") as File | null;
@@ -340,6 +341,7 @@ export async function POST(req: NextRequest) {
                         page_id: string;
                         video_data?: Record<string, any>;
                         link_data?: Record<string, any>;
+                        page_welcome_message?: string;
                     };
                     // Fetch video thumbnail — Facebook REQUIRES image_url in video_data
                     let videoThumbnailUrl: string | null = null;
@@ -376,13 +378,11 @@ export async function POST(req: NextRequest) {
                         };
                         if (primaryText) videoData.message = primaryText;
                         if (headline) videoData.title = headline;
-                        if (greeting) videoData.call_to_action = { type: "LEARN_MORE", value: { link: `https://m.me/${pageId}` } };
-                        if (validIceBreakers.length > 0) {
-                            videoData.call_to_action = {
-                                type: "MESSAGE_PAGE",
-                                value: { app_destination: "MESSENGER" },
-                            };
-                        }
+                        // Default CTA for Messenger ads
+                        videoData.call_to_action = {
+                            type: "MESSAGE_PAGE",
+                            value: { app_destination: "MESSENGER" },
+                        };
                         objectStorySpec = {
                             page_id: pageId,
                             video_data: videoData,
@@ -410,30 +410,27 @@ export async function POST(req: NextRequest) {
                         access_token: token,
                     };
 
-                    // Add messenger ice breakers if applicable
+                    // Add Messenger welcome message / ice breakers
+                    // Per Facebook Marketing API docs, page_welcome_message belongs at the
+                    // TOP LEVEL of object_story_spec (same level as page_id), NOT inside link_data or video_data
                     if (templateId) {
-                        // Use existing messenger template by ID
-                        if (objectStorySpec.link_data) {
-                            objectStorySpec.link_data.call_to_action = {
-                                type: "MESSAGE_PAGE",
-                                value: { page_welcome_message: JSON.stringify({ "id": templateId }) }
-                            };
-                        } else if (objectStorySpec.video_data) {
-                            objectStorySpec.video_data.call_to_action = {
-                                type: "MESSAGE_PAGE",
-                                value: { page_welcome_message: JSON.stringify({ "id": templateId }) }
-                            };
-                        }
-                    } else if (validIceBreakers.length > 0) {
-                        creativeBody.messenger_sponsored_message = {
-                            message: { text: greeting || primaryText || "สวัสดีครับ 👋" },
-                            ice_breakers: validIceBreakers.map((ib) => ({
+                        // Reference an existing saved Messenger template by ID
+                        objectStorySpec.page_welcome_message = JSON.stringify({ id: templateId });
+                    } else if (validIceBreakers.length > 0 || greeting) {
+                        // Build inline welcome message with icebreakers
+                        const welcomePayload: Record<string, unknown> = {
+                            message: { text: greeting || "สวัสดีครับ 👋" },
+                        };
+                        if (validIceBreakers.length > 0) {
+                            welcomePayload.ice_breakers = validIceBreakers.map((ib) => ({
                                 question: ib.question,
                                 payload: ib.payload || ib.question,
-                            })),
-                        };
+                            }));
+                        }
+                        objectStorySpec.page_welcome_message = JSON.stringify(welcomePayload);
                     }
 
+                    console.log("[Creative Debug] Full creative body:", JSON.stringify(creativeBody, null, 2));
                     const creativeRes = await fetch(`${FB_API}/${actId}/adcreatives`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },

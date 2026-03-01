@@ -43,10 +43,21 @@ export async function getGoogleClient(userId: string) {
   return oauth2;
 }
 
-/** ดึง Facebook access token */
+/** ดึง Facebook access token (บัญชีแรก) */
 export async function getFacebookToken(userId: string) {
   const account = await getProviderToken(userId, "facebook");
   return account?.access_token ?? null;
+}
+
+/** ดึง Facebook access token ทุกบัญชีที่ user เชื่อมต่อ */
+export async function getAllFacebookTokens(userId: string): Promise<{ providerAccountId: string; token: string }[]> {
+  const accounts = await prisma.account.findMany({
+    where: { userId, provider: "facebook" },
+    select: { providerAccountId: true, access_token: true },
+  });
+  return accounts
+    .filter((a): a is { providerAccountId: string; access_token: string } => !!a.access_token)
+    .map((a) => ({ providerAccountId: a.providerAccountId, token: a.access_token }));
 }
 
 /** แลกเปลี่ยน Short-lived Facebook token เป็น Long-lived token (60 วัน) */

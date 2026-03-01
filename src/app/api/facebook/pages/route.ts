@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getFacebookToken } from "@/lib/tokens";
+import { getAllFacebookTokens } from "@/lib/tokens";
 import { prisma } from "@/lib/db";
 import { runWithConcurrency } from "@/lib/concurrency";
 
@@ -9,7 +9,7 @@ const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * Fetch all pages the user has access to via Facebook Graph API.
- * Includes server-side rate limiting (10-min cooldown per user via DB timestamp).
+ * Supports multiple Facebook accounts connected to one user.
  */
 export async function GET(req: Request) {
     try {
@@ -34,43 +34,51 @@ export async function GET(req: Request) {
                 const elapsed = Date.now() - user.lastFbPagesSyncAt.getTime();
                 if (elapsed < SYNC_COOLDOWN_MS) {
                     const secondsLeft = Math.ceil((SYNC_COOLDOWN_MS - elapsed) / 1000);
-                    return NextResponse.json(
-                        { error: `rate_limited`, secondsLeft },
-                        { status: 429 }
-                    );
+                    return NextResponse.json({ error: `rate_limited`, secondsLeft }, { status: 429 });
                 }
             }
         }
         // ──────────────────────────────────────────────────────────────────────
 
-        const accessToken = await getFacebookToken(userId);
-        if (!accessToken) {
+        const fbTokens = await getAllFacebookTokens(userId);
+        if (!fbTokens.length) {
             return NextResponse.json({ error: "No Facebook access token found" }, { status: 400 });
         }
 
-        // Fetch pages the user manages
-        const url = `${FB_API}/me/accounts?fields=id,name,category,access_token,username&limit=100&access_token=${accessToken}`;
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (data.error) {
-            console.warn("[facebook-pages] API error:", data.error);
-            return NextResponse.json(
-                { error: data.error.message || "Failed to fetch Facebook pages" },
-                { status: 400 }
-            );
-        }
-
-        const rawPages: Array<{
+        // ดึงเพจจากทุก Facebook token ที่ user เชื่อมต่อ
+        const allRawPages: Array<{
             id: string;
             name: string;
             category?: string;
             access_token?: string;
             username?: string;
-        }> = data.data || [];
+            fbAccountId: string;
+        }> = [];
+
+        await Promise.all(
+            fbTokens.map(async ({ providerAccountId, token }) => {
+                try {
+                    const url = `${FB_API}/me/accounts?fields=id,name,category,access_token,username&limit=100&access_token=${token}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (data.error || !Array.isArray(data.data)) return;
+                    for (const p of data.data) {
+                        allRawPages.push({ ...p, fbAccountId: providerAccountId });
+                    }
+                } catch { /* ignore */ }
+            })
+        );
+
+        // กรองซ้ำตาม page id
+        const seen = new Set<string>();
+        const uniqueRaw = allRawPages.filter((p) => {
+            if (seen.has(p.id)) return false;
+            seen.add(p.id);
+            return true;
+        });
 
         // Fetch is_published + picture URL — max 5 concurrent calls
-        const pages = await runWithConcurrency(rawPages, 5, async (p) => {
+        const pages = await runWithConcurrency(uniqueRaw, 5, async (p) => {
             let pageStatus: string | null = null;
             let pictureUrl: string | null = null;
 
@@ -97,6 +105,7 @@ export async function GET(req: Request) {
                 pageStatus,
                 pictureUrl,
                 hasToken: !!p.access_token,
+                fbAccountId: p.fbAccountId,
             };
         });
 

@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { getFacebookToken } from "@/lib/tokens";
+import { getAllFacebookTokens } from "@/lib/tokens";
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 
@@ -33,39 +33,51 @@ export async function GET(req: Request) {
   }
   // ─────────────────────────────────────────────────────────────────────────
 
-  const token = await getFacebookToken(userId);
-  if (!token) {
+  const fbTokens = await getAllFacebookTokens(userId);
+  if (!fbTokens.length) {
     return NextResponse.json({ error: "Facebook account not connected" }, { status: 400 });
   }
 
   try {
-    // ดึงรายการ ad accounts ทั้งหมดของ user
-    const res = await fetch(
-      `${FB_API}/me/adaccounts?fields=id,name,account_id,account_status,currency,timezone_name&limit=500&access_token=${token}`
+    // ดึง ad accounts จากทุก Facebook token ที่ user เชื่อมต่อ
+    const allResults = await Promise.all(
+      fbTokens.map(async ({ providerAccountId, token }) => {
+        try {
+          const res = await fetch(
+            `${FB_API}/me/adaccounts?fields=id,name,account_id,account_status,currency,timezone_name&limit=500&access_token=${token}`
+          );
+          const data = await res.json();
+          if (data.error) return [];
+          return (data.data ?? []).map((acc: {
+            id: string;
+            name: string;
+            account_id: string;
+            account_status: number;
+            currency: string;
+            timezone_name: string;
+          }) => ({
+            id: acc.id,           // act_XXXXXXX
+            accountId: acc.account_id,
+            name: acc.name,
+            status: acc.account_status,
+            isActive: acc.account_status === 1,
+            currency: acc.currency,
+            timezone: acc.timezone_name,
+            fbAccountId: providerAccountId,
+          }));
+        } catch {
+          return [];
+        }
+      })
     );
-    const data = await res.json();
 
-    if (data.error) {
-      return NextResponse.json({ error: data.error.message }, { status: 400 });
-    }
-
-    // account_status: 1=ACTIVE, 2=DISABLED, 3=UNSETTLED, 7=PENDING_CLOSURE, 9=IN_GRACE_PERIOD
-    const accounts = (data.data ?? []).map((acc: {
-      id: string;
-      name: string;
-      account_id: string;
-      account_status: number;
-      currency: string;
-      timezone_name: string;
-    }) => ({
-      id: acc.id,           // act_XXXXXXX
-      accountId: acc.account_id,
-      name: acc.name,
-      status: acc.account_status,
-      isActive: acc.account_status === 1,
-      currency: acc.currency,
-      timezone: acc.timezone_name,
-    }));
+    // รวมผลและกรองซ้ำตาม accountId
+    const seen = new Set<string>();
+    const accounts = allResults.flat().filter((acc) => {
+      if (seen.has(acc.accountId)) return false;
+      seen.add(acc.accountId);
+      return true;
+    });
 
     // Stamp last sync time (for server-side rate limiting) - Only if explicit sync
     if (isSync) {
