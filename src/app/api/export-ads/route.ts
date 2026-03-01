@@ -38,7 +38,7 @@ async function fetchAdsInfo(accountId: string, token: string): Promise<Record<st
         "creative{name,object_story_spec,body,image_url}",
         "adset{daily_budget,lifetime_budget,targeting_optimization_types,targeting{age_min,age_max,age_range,genders,interests,flexible_spec,excluded_custom_audiences}}",
         "campaign{name,objective}",
-        "insights.date_preset(lifetime){spend}"
+        "insights.date_preset(maximum){spend}"
     ].join(",");
 
     // ดึง account name แยก
