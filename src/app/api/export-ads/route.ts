@@ -36,7 +36,7 @@ async function fetchAdsInfo(accountId: string, token: string): Promise<Record<st
         "status",
         "effective_status",
         "creative{object_story_spec,body,image_url}",
-        "adset{daily_budget,lifetime_budget,targeting{age_min,age_max,genders,interests,excluded_custom_audiences,page_types}}",
+        "adset{daily_budget,lifetime_budget,targeting{age_min,age_max,genders,interests,excluded_custom_audiences}}",
         "campaign{name,objective}",
     ].join(",");
 
