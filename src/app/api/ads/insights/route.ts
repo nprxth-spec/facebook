@@ -67,50 +67,45 @@ export async function GET(req: Request) {
           ? acc.accountId
           : `act_${acc.accountId}`;
 
-        const insightsUrl = new URL(`${FB_API}/${accountPath}/insights`);
-        insightsUrl.searchParams.set("level", "ad");
-        insightsUrl.searchParams.set("time_range", timeRange);
-        insightsUrl.searchParams.set(
-          "fields",
-          "ad_id,ad_name,account_id,impressions,clicks,spend,cost_per_result,objective,actions"
-        );
-        insightsUrl.searchParams.set("limit", "500");
-        insightsUrl.searchParams.set("access_token", token);
+        const fields = [
+          "id",
+          "name",
+          "effective_status",
+          "configured_status",
+          "adset{name,targeting,targeting_optimization_types,optimization_goal}",
+          "adcreatives{image_url,thumbnail_url,actor_id{id,name,username},instagram_actor_id,effective_object_story_id,object_story_id,object_story_spec{page_id{id,name,username},link_data{picture},video_data{image_url},photo_data{url}}}",
+          `insights.time_range(${timeRange}){impressions,clicks,spend,cost_per_result,objective,actions}`,
+        ].join(",");
 
-        const insRes = await fetch(insightsUrl.toString());
-        const insData = await insRes.json();
+        let url: string | null = `${FB_API}/${accountPath}/ads?fields=${encodeURIComponent(fields)}&limit=100&access_token=${token}`;
 
-        if (insData?.data && Array.isArray(insData.data) && insData.data.length > 0) {
-          const adIds = insData.data.map((i: any) => i.ad_id);
+        while (url) {
+          const res = await fetch(url);
+          const data: any = await res.json();
+          if (data.error) throw new Error(data.error.message);
 
-          // Fetch ad metadata in chunks of 50 (parallel)
-          const chunkPromises = [];
-          for (let i = 0; i < adIds.length; i += 50) {
-            const chunk = adIds.slice(i, i + 50);
-            const adsUrl = new URL(`${FB_API}`);
-            adsUrl.searchParams.set("ids", chunk.join(","));
-            adsUrl.searchParams.set(
-              "fields",
-              "id,name,effective_status,configured_status,adset{name,targeting,targeting_optimization_types,optimization_goal},adcreatives{image_url,thumbnail_url,actor_id{id,name,username},instagram_actor_id,effective_object_story_id,object_story_id,object_story_spec{page_id{id,name,username},link_data{picture},video_data{image_url},photo_data{url}}}"
-            );
-            adsUrl.searchParams.set("access_token", token);
-            chunkPromises.push(
-              fetch(adsUrl.toString())
-                .then((res) => res.json())
-                .catch(() => ({}))
-            );
-          }
-
-          const chunkResults = await Promise.all(chunkPromises);
-          const mergedAdsData = Object.assign({}, ...chunkResults);
-
-          insData.data.forEach((insight: any) => {
-            const adMetadata = mergedAdsData[insight.ad_id] || {};
-            allAds.push({ ...insight, ...adMetadata, _accountName: acc.name });
+          const chunk = (data.data ?? []).map((ad: any) => {
+            // Flatten insights array into the ad root object for the dashboard mapper
+            const insight = ad.insights?.data?.[0] || {};
+            return {
+              ...ad,
+              impressions: insight.impressions,
+              clicks: insight.clicks,
+              spend: insight.spend,
+              cost_per_result: insight.cost_per_result,
+              objective: insight.objective,
+              actions: insight.actions,
+              _accountName: acc.name,
+              // Map 'id' to 'ad_id' and 'name' to 'ad_name' so old mapping works
+              ad_id: ad.id,
+              ad_name: ad.name,
+            };
           });
+          allAds.push(...chunk);
+          url = data.paging?.next ?? null;
         }
       } catch (err) {
-        console.error("FB ads insights error for account", acc.accountId, err);
+        console.error("FB ads batch fetch error for account", acc.accountId, err);
       }
     })
   );
