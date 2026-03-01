@@ -35,10 +35,15 @@ async function fetchAdsInfo(accountId: string, token: string): Promise<Record<st
         "created_time",
         "status",
         "effective_status",
-        "creative{object_story_spec,body,image_url}",
+        "creative{name,object_story_spec,body,image_url}",
         "adset{daily_budget,lifetime_budget,targeting{age_min,age_max,genders,interests,excluded_custom_audiences}}",
         "campaign{name,objective}",
     ].join(",");
+
+    // ดึง account name แยก
+    const accountRes = await fetch(`${FB_API}/${accountId}?fields=name&access_token=${token}`);
+    const accountData = await accountRes.json() as { name?: string };
+    const accountName = accountData.name ?? accountId;
 
     let rows: Record<string, unknown>[] = [];
     let url: string | null =
@@ -48,7 +53,8 @@ async function fetchAdsInfo(accountId: string, token: string): Promise<Record<st
         const res = await fetch(url);
         const data: { data?: Record<string, unknown>[]; error?: { message: string }; paging?: { next?: string } } = await res.json();
         if (data.error) throw new Error(data.error.message);
-        rows = rows.concat(data.data ?? []);
+        const chunk = (data.data ?? []).map(ad => ({ ...ad, _account_name: accountName }));
+        rows = rows.concat(chunk);
         url = data.paging?.next ?? null;
     }
 
@@ -62,9 +68,9 @@ function parseTargeting(adset: Record<string, unknown> | undefined) {
     const targeting = adset.targeting as Record<string, unknown> | undefined;
     if (!targeting) return { sex: "", age: "", interests: "" };
 
-    // Gender: 1=Male, 2=Female, ไม่มี=All
+    // Gender: 1=Male, 2=Female, ไม่มี=ทุกเพศ
     const genders = targeting.genders as number[] | undefined;
-    let sex = "All";
+    let sex = "ทุกเพศ";
     if (genders?.includes(1) && !genders.includes(2)) sex = "Male";
     else if (genders?.includes(2) && !genders.includes(1)) sex = "Female";
 
@@ -142,7 +148,11 @@ function getAdFieldValue(ad: Record<string, unknown>, fbCol: string): string {
     switch (fbCol) {
         case "ad_id": return String(ad.id ?? "");
         case "page_id": return getPageId(ad);
-        case "account_name": return String((ad.account_name as string) ?? "");
+        case "account_name": return String((ad._account_name as string) ?? "");
+        case "creative_name": {
+            const creative = ad.creative as Record<string, unknown> | undefined;
+            return String(creative?.name ?? "");
+        }
         case "sex": return targeting.sex;
         case "age": return targeting.age;
         case "interests": return targeting.interests;
@@ -192,9 +202,6 @@ export async function POST(req: Request) {
             const token = fbTokens[0].token;
             try {
                 const ads = await fetchAdsInfo(accountId, token);
-                for (const ad of ads) {
-                    (ad as Record<string, unknown>).account_name = accountId; // fallback
-                }
                 allAds.push(...ads);
             } catch (e) {
                 console.warn(`[export-ads] Failed to fetch ads for ${accountId}:`, e);

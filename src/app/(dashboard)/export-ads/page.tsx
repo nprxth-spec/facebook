@@ -26,6 +26,7 @@ const AD_COLUMNS = [
     { key: "account_name", label: "Account Name" },
     { key: "ad_name", label: "Ad Name" },
     { key: "campaign_name", label: "Campaign Name" },
+    { key: "creative_name", label: "ชื่อสื่อ (Creative Name)" },
     { key: "sex", label: "เพศ (Sex)" },
     { key: "age", label: "อายุ (Age)" },
     { key: "interests", label: "ความสนใจ (Interests)" },
@@ -43,7 +44,7 @@ const DEFAULT_MAPPING: ColMap[] = [
     { fbCol: "page_id", sheetCol: "B" },  // B
     { fbCol: SKIP, sheetCol: "C" },  // C skip
     { fbCol: SKIP, sheetCol: "D" },  // D skip
-    { fbCol: SKIP, sheetCol: "E" },  // E skip
+    { fbCol: "creative_name", sheetCol: "E" },  // E ชื่อสื่อ
     { fbCol: SKIP, sheetCol: "F" },  // F skip
     { fbCol: "account_name", sheetCol: "G" },  // G
     { fbCol: "sex", sheetCol: "H" },  // H
