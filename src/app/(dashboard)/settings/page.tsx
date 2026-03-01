@@ -86,6 +86,26 @@ function SettingsContent() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
 
+  // Handle success/error from custom Facebook link OAuth callback
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+    if (success === "linked") {
+      toast.success(isThai ? "เชื่อมต่อ Facebook ใหม่เรียบร้อย" : "Facebook account linked successfully");
+      router.replace("/settings?tab=connections");
+    } else if (success === "reconnected") {
+      toast.success(isThai ? "อัปเดต Token Facebook เรียบร้อย" : "Facebook token refreshed");
+      router.replace("/settings?tab=connections");
+    } else if (error === "already_linked_to_another_user") {
+      toast.error(isThai ? "บัญชี Facebook นี้ถูกเชื่อมต่อกับ User อื่นแล้ว" : "This Facebook account is already linked to another user");
+      router.replace("/settings?tab=connections");
+    } else if (error) {
+      toast.error(isThai ? "ไม่สามารถเชื่อมต่อ Facebook ได้" : "Failed to link Facebook account");
+      router.replace("/settings?tab=connections");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const connectedProviders = session?.user?.connectedProviders ?? [];
   const hasGoogle = connectedProviders.includes("google");
   const hasFacebook = connectedProviders.includes("facebook");
@@ -817,7 +837,7 @@ function SettingsContent() {
                         size="sm"
                         variant="outline"
                         className="h-8 px-3 text-xs gap-1.5 bg-white text-[#1877F2] border-blue-200 hover:bg-blue-50 dark:bg-transparent dark:text-[#9ec5ff] dark:border-blue-800 dark:hover:bg-blue-950/40"
-                        onClick={() => signIn("facebook", { callbackUrl: "/settings?tab=connections" })}
+                        onClick={() => { window.location.href = "/api/auth/link-facebook"; }}
                       >
                         <Plus className="w-3 h-3" />
                         {isThai ? "เพิ่มบัญชี Facebook" : "Add Facebook Account"}
