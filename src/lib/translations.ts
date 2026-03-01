@@ -3,6 +3,7 @@ export const translations = {
         sidebar: {
             dashboard: "แดชบอร์ด",
             export: "ส่งออกข้อมูล",
+            export_ads: "ส่งออกข้อมูลโฆษณา",
             ads: "โฆษณา",
             create: "สร้างโฆษณา",
             tools: "เครื่องมือ",
@@ -192,6 +193,7 @@ export const translations = {
         sidebar: {
             dashboard: "Dashboard",
             export: "Export Data",
+            export_ads: "Export Ads Info",
             ads: "Ads Overview",
             create: "Create Ads",
             tools: "Tools",

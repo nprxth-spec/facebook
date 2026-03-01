@@ -13,6 +13,7 @@ import {
   BarChart3,
   Wrench,
   Sparkles,
+  TableProperties,
 } from "lucide-react";
 import React from "react";
 import { useTheme } from "@/components/providers/ThemeProvider";
@@ -42,6 +43,11 @@ const navItems = [
     key: "export",
     href: "/export",
     icon: FileSpreadsheet,
+  },
+  {
+    key: "export_ads",
+    href: "/export-ads",
+    icon: TableProperties,
   },
   {
     key: "settings",
