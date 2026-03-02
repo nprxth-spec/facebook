@@ -341,66 +341,106 @@ export async function runExportTask(options: ExportServiceOptions) {
 
         // We will do a batchUpdate. For append mode, we need to know the starting row.
         let startRow = 2; // For overwrite mode
+        let finalFbRows = filteredFbRows;
+
         if (writeMode === "append") {
             const existing = await sheetsClient.spreadsheets.values.get({
                 spreadsheetId: googleSheetId,
-                range: `'${sheetTab}'!A:A`, // Just checking column A to find the last row might not be enough if A is skipped, but usually we map A. Let's check a wider range like A:ZZ to be safe, but just getting max rows is fine.
+                range: `'${sheetTab}'!A:ZZ`, // Read a wider range to get dates and ad_ids
             });
-            startRow = (existing.data.values?.length ?? 1) + 1;
+            const rows = existing.data.values || [];
+            startRow = rows.length + 1;
+
+            // Deduplication logic: Check for existing Date + Ad ID
+            const dateColMapping = columnMapping.find(m => m.fbCol === "date" && m.sheetCol !== "__skip__");
+            const adIdColMapping = columnMapping.find(m => m.fbCol === "ad_id" && m.sheetCol !== "__skip__");
+
+            if (dateColMapping && adIdColMapping) {
+                const dateColIndex = colLetterToIndex(dateColMapping.sheetCol);
+                const adIdColIndex = colLetterToIndex(adIdColMapping.sheetCol);
+                const existingPairs = new Set<string>();
+
+                for (let i = 1; i < rows.length; i++) { // Skip row 0 (header)
+                    const row = rows[i];
+                    const rowDate = row[dateColIndex];
+                    const rowAdId = row[adIdColIndex];
+                    if (rowDate && rowAdId) {
+                        existingPairs.add(`${rowDate}_${rowAdId}`);
+                    }
+                }
+
+                if (existingPairs.size > 0) {
+                    finalFbRows = filteredFbRows.filter(fbRow => {
+                        const dummyDate = [{ fbCol: "date", sheetCol: "A" }];
+                        const dummyAdId = [{ fbCol: "ad_id", sheetCol: "A" }];
+                        const mappedDate = mapRowToSheetRow(fbRow as Record<string, unknown>, dummyDate)[0]?.value ?? "";
+                        const mappedAdId = mapRowToSheetRow(fbRow as Record<string, unknown>, dummyAdId)[0]?.value ?? "";
+
+                        if (mappedDate && mappedAdId) {
+                            if (existingPairs.has(`${mappedDate}_${mappedAdId}`)) {
+                                return false; // Duplicate found; skip it
+                            }
+                        }
+                        return true;
+                    });
+                }
+            }
         }
 
-        const dataEntries = mappingGroups.map(group => {
-            const startCol = group.sheetCols[0];
-            const endCol = group.sheetCols[group.sheetCols.length - 1];
+        totalRows = finalFbRows.length; // Ensure totalRows accounts for deduplication
 
-            // Build the rows array for this specific group
-            const rowsForGroup = filteredFbRows.map(fbRow => {
-                // We use mapRowToSheetRow, but we only need the exact values for this group
-                // mapRowToSheetRow returns null for skipped, but here we only iterate through active ones anyway
-                // So let's build the values directly
-                return group.fbCols.map(fbCol => {
-                    const tempMapping = [{ fbCol, sheetCol: "A" }]; // Dummy sheetCol just to use existing function logic
-                    const mapped = mapRowToSheetRow(fbRow as Record<string, unknown>, tempMapping);
-                    const item = mapped[0];
-                    return item ? item.value : "";
+        if (totalRows === 0 && writeMode === "append") {
+            // Nothing to append
+            exportDetails = [];
+        } else {
+            const dataEntries = mappingGroups.map(group => {
+                const startCol = group.sheetCols[0];
+                const endCol = group.sheetCols[group.sheetCols.length - 1];
+
+                // Build the rows array for this specific group
+                const rowsForGroup = finalFbRows.map(fbRow => {
+                    return group.fbCols.map(fbCol => {
+                        const tempMapping = [{ fbCol, sheetCol: "A" }]; // Dummy sheetCol just to use existing function logic
+                        const mapped = mapRowToSheetRow(fbRow as Record<string, unknown>, tempMapping);
+                        const item = mapped[0];
+                        return item ? item.value : "";
+                    });
                 });
+
+                const rangeString = `'${sheetTab}'!${startCol}${startRow}:${endCol}${startRow + rowsForGroup.length - 1}`;
+
+                return {
+                    range: rangeString,
+                    values: rowsForGroup
+                };
             });
 
-            const rangeString = `'${sheetTab}'!${startCol}${startRow}:${endCol}${startRow + rowsForGroup.length - 1}`;
+            exportDetails = dataEntries;
 
-            return {
-                range: rangeString,
-                values: rowsForGroup
-            };
-        });
+            if (writeMode === "overwrite") {
+                // Clear existing data first, but ONLY for the columns we are writing to
+                // This preserves formulas in skipped columns
+                const rangesToClear = mappingGroups.map(g => {
+                    return `'${sheetTab}'!${g.sheetCols[0]}2:${g.sheetCols[g.sheetCols.length - 1]}`;
+                });
 
-        exportDetails = dataEntries;
+                await sheetsClient.spreadsheets.values.batchClear({
+                    spreadsheetId: googleSheetId,
+                    requestBody: {
+                        ranges: rangesToClear
+                    }
+                });
+            }
 
-        if (writeMode === "overwrite") {
-            // Clear existing data first, but ONLY for the columns we are writing to
-            // This preserves formulas in skipped columns
-            // However, clear might be complex with multiple ranges.
-            // Let's clear the specific ranges we are about to write, but from row 2 to bottom
-            const rangesToClear = mappingGroups.map(g => {
-                return `'${sheetTab}'!${g.sheetCols[0]}2:${g.sheetCols[g.sheetCols.length - 1]}`;
-            });
-
-            await sheetsClient.spreadsheets.values.batchClear({
+            // Now do the batchUpdate
+            await sheetsClient.spreadsheets.values.batchUpdate({
                 spreadsheetId: googleSheetId,
                 requestBody: {
-                    ranges: rangesToClear
+                    valueInputOption: "USER_ENTERED",
+                    data: dataEntries
                 }
             });
         }
-
-        // Now do the batchUpdate
-        await sheetsClient.spreadsheets.values.batchUpdate({
-            spreadsheetId: googleSheetId,
-            requestBody: {
-                valueInputOption: "USER_ENTERED",
-                data: dataEntries
-            }
-        });
     } catch (err: unknown) {
         logStatus = "error";
         logError = err instanceof Error ? err.message : "Unknown error";
