@@ -60,18 +60,16 @@ export async function GET(req: Request) {
                     if (schedHour !== currentHour) return null;
                     if (parseInt(currentMin) < parseInt(schedMin)) return null;
 
-                    // Deduplication: skip if already ran today in user's timezone
-                    const startOfToday = new Date(userTime);
-                    startOfToday.setHours(0, 0, 0, 0);
-                    const endOfToday = new Date(userTime);
-                    endOfToday.setHours(23, 59, 59, 999);
+                    // Deduplication: skip if already ran successfully in the last 12 hours
+                    // This handles timezone differences robustly because the schedule runs exactly once per 24 hours.
+                    const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
 
                     const existingLog = await prisma.exportLog.findFirst({
                         where: {
                             configId: config.id,
                             exportType: "auto",
                             status: "success",
-                            createdAt: { gte: startOfToday, lte: endOfToday },
+                            createdAt: { gte: twelveHoursAgo },
                         },
                         select: { id: true },
                     });
