@@ -322,7 +322,42 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+      {/* Features */}
+      <section id="features" className="py-20 lg:py-28 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-white/5">
+        <div className="max-w-6xl mx-auto space-y-16">
+          <div className="text-center space-y-4 max-w-2xl mx-auto">
+            <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+              {isThai ? "จัดการโฆษณาง่ายขึ้นด้วย Centxo" : "Everything you need to manage your ads"}
+            </h2>
+            <p className="text-slate-600 dark:text-slate-400">
+              {isThai
+                ? "เครื่องมือครบครันที่จะช่วยให้คุณลดเวลาทำงานซ้ำซ้อน และโฟกัสกับผลลัพธ์ได้มากขึ้น"
+                : "A complete toolkit to automate the boring stuff and let you focus on what really matters—results."}
+            </p>
+          </div>
 
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+            {features.map((feature, idx) => (
+              <div
+                key={idx}
+                className="group relative rounded-3xl p-6 sm:p-8 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-white/10 shadow-sm hover:shadow-md transition-all duration-200"
+              >
+                <div
+                  className={`inline-flex items-center justify-center rounded-xl p-3 mb-5 transition-colors ${feature.color}`}
+                >
+                  <feature.icon className="w-5 h-5 sm:w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">
+                  {isThai ? feature.titleTh : feature.titleEn}
+                </h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                  {isThai ? feature.descriptionTh : feature.descriptionEn}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
       {/* Footer */}
       <footer className="border-t border-gray-200 dark:border-gray-800 py-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">

@@ -1,47 +1,88 @@
-"use client";
-
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#f4f5ff] via-[#f8f9ff] to-[#fef9ff] dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 px-4 py-10 flex items-center justify-center">
-      <div className="w-full max-w-3xl rounded-3xl bg-white/95 dark:bg-slate-900 shadow-[0_18px_60px_rgba(15,23,42,0.16)] border border-slate-100/90 dark:border-slate-800 px-6 sm:px-10 py-8 space-y-6">
-        <header className="space-y-1">
-          <p className="text-xs text-slate-400 uppercase tracking-[0.2em]">
-            Centxo
-          </p>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-50">
-            เงื่อนไขการใช้งาน (Terms of Service)
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            สรุปข้อกำหนดหลักในการใช้งานระบบ Centxo
-          </p>
-        </header>
-
-        <div className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-          <p>
-            การใช้งานบริการ Centxo ถือว่าคุณยอมรับเงื่อนไขการใช้งานนี้ โดยคุณตกลงว่าจะ
-            ใช้งานระบบตามกฎหมายที่เกี่ยวข้อง และไม่ทำการใช้งานที่อาจสร้างความเสียหาย
-            ต่อระบบหรือบุคคลอื่น
-          </p>
-          <p>
-            ระบบนี้ให้บริการในลักษณะ &quot;ตามสภาพที่เป็นอยู่&quot; (as‑is) โดยไม่มีการรับประกัน
-            ใด ๆ ทั้งสิ้น ผู้ใช้งานควรตรวจสอบความถูกต้องของข้อมูลก่อนนำไปใช้ประกอบการตัดสินใจ
-          </p>
-          <p>
-            เราอาจปรับปรุง แก้ไข หรือระงับการให้บริการบางส่วนได้ตามความเหมาะสม
-            โดยจะแจ้งให้ทราบล่วงหน้าหากเป็นการเปลี่ยนแปลงที่มีนัยสำคัญ
-          </p>
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 py-20 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto space-y-8">
+        <div>
+          <Link href="/" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition-colors mb-8">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Home
+          </Link>
+          <h1 className="text-3xl font-bold tracking-tight">Terms of Service</h1>
+          <p className="text-sm text-slate-500 mt-2">Last updated: March 2, 2026</p>
         </div>
 
-        <footer className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400">
-          <Link href="/" className="hover:text-slate-700 dark:hover:text-slate-200">
-            ← กลับหน้าหลัก
-          </Link>
-          <span>© {new Date().getFullYear()} Centxo</span>
-        </footer>
+        <div className="prose prose-slate dark:prose-invert max-w-none space-y-6 text-sm leading-relaxed">
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">1. Agreement to Terms</h2>
+            <p>
+              By accessing or using the Centxo platform ("Service"), you agree to be bound by these Terms of Service. If you disagree with any part of the terms, you may not access the Service.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">2. Service Description</h2>
+            <p>Centxo provides Facebook Advertisement Management tools, including but not limited to:</p>
+            <ul className="list-disc pl-5 space-y-1 mt-2">
+              <li>Campaign creation and management</li>
+              <li>Automated ad optimization</li>
+              <li>Analytics and reporting</li>
+              <li>Multi-account management</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">3. Account & Security</h2>
+            <p>
+              You are responsible for maintaining the confidentiality of your account credentials (including Facebook Login tokens) and for all activities that occur under your account. You agree to notify us immediately of any unauthorized use of your account.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">4. Facebook Platform Policies</h2>
+            <p>
+              Our Service interacts with the Meta/Facebook Advertising Platform. You agree to comply with all applicable Facebook Terms and Policies, including the Facebook Advertising Policies. We are not responsible for any ad account bans or restrictions imposed by Meta.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">5. Google Terms</h2>
+            <p>
+              Our Service interacts with Google API Services. By using the Service, you imply agreement to be bound by Google's Terms of Service.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">6. Subscription & Payments</h2>
+            <p>
+              Some features of the Service may require a paid subscription. You agree to provide accurate billing information and authorize us to charge your chosen payment method. Refunds are subject to our Refund Policy.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">7. Data Usage</h2>
+            <p>
+              We collect and use data as described in our Privacy Policy. By using the Service, you consent to such collection and usage.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">8. Limitation of Liability</h2>
+            <p>
+              Centxo shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from your use of the Service.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">9. Contact Us</h2>
+            <p>
+              If you have any questions about these Terms, please contact us at support@centxo.com.
+            </p>
+          </section>
+        </div>
       </div>
     </div>
   );
 }
-

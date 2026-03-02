@@ -1,47 +1,83 @@
-"use client";
-
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#f4f5ff] via-[#f8f9ff] to-[#fef9ff] dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 px-4 py-10 flex items-center justify-center">
-      <div className="w-full max-w-3xl rounded-3xl bg-white/95 dark:bg-slate-900 shadow-[0_18px_60px_rgba(15,23,42,0.16)] border border-slate-100/90 dark:border-slate-800 px-6 sm:px-10 py-8 space-y-6">
-        <header className="space-y-1">
-          <p className="text-xs text-slate-400 uppercase tracking-[0.2em]">
-            Centxo
-          </p>
-          <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-50">
-            นโยบายความเป็นส่วนตัว (Privacy Policy)
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            อธิบายการเก็บ ใช้ และปกป้องข้อมูลของคุณ
-          </p>
-        </header>
-
-        <div className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-          <p>
-            เราเก็บข้อมูลที่จำเป็นต่อการให้บริการ เช่น ข้อมูลบัญชีผู้ใช้ ข้อมูลการเชื่อมต่อ
-            กับ Facebook และ Google และการตั้งค่าการส่งออก โดยจะไม่นำข้อมูลของคุณไปขาย
-            หรือเปิดเผยต่อบุคคลที่สามที่ไม่เกี่ยวข้องกับการให้บริการ
-          </p>
-          <p>
-            ข้อมูลที่ละเอียดอ่อน เช่น access token จะถูกจัดเก็บอย่างปลอดภัย และใช้
-            เพื่อวัตถุประสงค์ในการดึงข้อมูลโฆษณาและส่งออกไปยัง Google Sheets เท่านั้น
-          </p>
-          <p>
-            คุณสามารถติดต่อเราเพื่อขอแก้ไข หรือลบข้อมูลส่วนบุคคลของคุณได้ตามสิทธิ์ที่กฎหมาย
-            คุ้มครองข้อมูลกำหนด และเราจะพยายามดำเนินการตามคำขอภายในระยะเวลาที่เหมาะสม
-          </p>
+    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 py-20 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto space-y-8">
+        <div>
+          <Link href="/" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 transition-colors mb-8">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Home
+          </Link>
+          <h1 className="text-3xl font-bold tracking-tight">Privacy Policy</h1>
+          <p className="text-sm text-slate-500 mt-2">Last updated: March 2, 2026</p>
         </div>
 
-        <footer className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400">
-          <Link href="/" className="hover:text-slate-700 dark:hover:text-slate-200">
-            ← กลับหน้าหลัก
-          </Link>
-          <span>© {new Date().getFullYear()} Centxo</span>
-        </footer>
+        <div className="prose prose-slate dark:prose-invert max-w-none space-y-6 text-sm leading-relaxed">
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">1. Introduction</h2>
+            <p>
+              Centxo ("we", "us", or "our") respects your privacy and is committed to protecting your personal data. This Privacy Policy tells you how we look after your personal data when you use the Centxo platform and tells you about your privacy rights and how the law protects you.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">2. The Data We Collect</h2>
+            <p>
+              We may collect, use, store and transfer different kinds of personal data about you which we have grouped together as follows:
+            </p>
+            <ul className="list-disc pl-5 space-y-2 mt-2">
+              <li><strong>Identity Data:</strong> includes first name, last name, username or similar identifier.</li>
+              <li><strong>Contact Data:</strong> includes email address, Facebook profile information, and Google profile (name, picture).</li>
+              <li><strong>Technical Data:</strong> includes internet protocol (IP) address, your login data, browser type and version.</li>
+              <li><strong>Usage Data:</strong> includes information about how you use our website and services.</li>
+              <li><strong>Ad Data:</strong> information about your Facebook Ad Campaigns, Ad Sets, and Ads imported via API.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">3. How We Use Your Data</h2>
+            <p>
+              We will only use your personal data when the law allows us to. Most commonly, we will use your personal data in the following circumstances:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 mt-2">
+              <li>To provide and maintain the Service (managing your ads).</li>
+              <li>To authenticate you via Facebook Login and Google Sign-In.</li>
+              <li>To improve the Service and develop new features.</li>
+              <li>To provide customer support.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">4. Facebook Data</h2>
+            <p>
+              Our App uses Facebook Login, the Marketing API, and Pages API. We request the following permissions: <code>email</code>, <code>public_profile</code>, <code>ads_read</code>, <code>ads_management</code>, <code>pages_show_list</code>, <code>pages_read_engagement</code>, <code>pages_messaging</code>, <code>pages_manage_metadata</code>, <code>pages_manage_ads</code>, <code>business_management</code>. We use these to provide ad management, Inbox (Messenger conversations), and analytics. We do not sell this data to third parties.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">5. Google Data</h2>
+            <p>
+              Our App uses Google Sign-In for authentication and Google Sheets API for the Export feature. We collect email address, name, and profile picture from your Google User Data. With your consent, we request the <code>drive.file</code> scope to export your ad data (campaigns, ads, insights) to Google Sheets. You select the spreadsheet via Google Picker; we access only the files you explicitly choose. Centxo's use and transfer of information received from Google APIs adheres to the <strong>Google API Services User Data Policy</strong>, including the Limited Use requirements.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">6. Data Security</h2>
+            <p>
+              We have put in place appropriate security measures to prevent your personal data from being accidentally lost, used or accessed in an unauthorized way, altered or disclosed.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold mt-8 mb-3">7. Contact Us</h2>
+            <p>
+              If you have any questions about this Privacy Policy, including any requests to exercise your legal rights, please contact us at support@centxo.com.
+            </p>
+          </section>
+        </div>
       </div>
     </div>
   );
 }
-
