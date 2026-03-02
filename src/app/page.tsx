@@ -154,7 +154,7 @@ export default function LandingPage() {
                   </Button>
                 </Link>
               </div>
-              <div className="flex items-center gap-2 text-[12px] text-slate-400 mt-1 sm:mt-0">
+              <div className="flex items-center gap-2 text-[13px] text-slate-400 mt-1 sm:mt-0">
                 <span className="inline-flex items-center gap-1">
                   <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
                   {isThai

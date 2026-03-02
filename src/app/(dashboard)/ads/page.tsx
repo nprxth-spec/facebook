@@ -517,6 +517,8 @@ export default function AdsPage() {
   const [ads, setAds] = useState<AdRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 20;
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -564,6 +566,18 @@ export default function AdsPage() {
         try {
           setVisibleColumns(prev => ({ ...prev, ...JSON.parse(savedCols) }));
         } catch (e) { }
+      }
+
+      const savedSort = localStorage.getItem("ads_sortConfig");
+      if (savedSort) {
+        try {
+          setSortConfig(JSON.parse(savedSort));
+        } catch (e) { }
+      }
+
+      const savedPage = localStorage.getItem("ads_currentPage");
+      if (savedPage) {
+        setCurrentPage(parseInt(savedPage, 10) || 1);
       }
 
       setIsHydrated(true);
@@ -630,6 +644,38 @@ export default function AdsPage() {
     if (!selectedAccounts.length) return ads;
     return ads.filter(ad => selectedAccounts.includes(ad.accountId) || selectedAccounts.includes(`act_${ad.accountId}`));
   }, [ads, selectedAccounts]);
+
+  const sortedAds = useMemo(() => {
+    const list = [...filteredAds];
+    if (!sortConfig) return list;
+
+    const { key, direction } = sortConfig;
+    const mod = direction === "desc" ? -1 : 1;
+
+    return list.sort((a, b) => {
+      if (key === "result") return (a.result - b.result) * mod;
+      if (key === "spend") return (a.spend - b.spend) * mod;
+      if (key === "cpr") return (a.costPerResult - b.costPerResult) * mod;
+      if (key === "status") {
+        const statA = formatStatus(a.status, a.spend);
+        const statB = formatStatus(b.status, b.spend);
+        return statA.localeCompare(statB) * mod;
+      }
+      return 0;
+    });
+  }, [filteredAds, sortConfig]);
+
+  const paginatedAds = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    return sortedAds.slice(start, start + rowsPerPage);
+  }, [sortedAds, currentPage, rowsPerPage]);
+
+  const totalPages = Math.ceil(sortedAds.length / rowsPerPage);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedAccounts, debouncedSearch, fromDateCustom, toDateCustom]);
 
   const handleSort = (key: string) => {
     let direction: "asc" | "desc" = "desc";
@@ -935,293 +981,334 @@ export default function AdsPage() {
                 : "No ads found for the selected filters."}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 dark:bg-gray-800/60">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                      #
-                    </th>
-                    {visibleColumns.account && (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-800/60">
+                    <tr>
                       <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                        {isThai ? "บัญชีโฆษณา" : "Ad account"}
+                        #
                       </th>
-                    )}
-                    {visibleColumns.adName && (
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                        {isThai ? "ชื่อโฆษณา" : "Ad"}
-                      </th>
-                    )}
-                    {visibleColumns.page && (
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                        {isThai ? "เพจ" : "Page"}
-                      </th>
-                    )}
-                    {visibleColumns.targeting && (
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[180px]">
-                        {isThai ? "กลุ่มเป้าหมาย" : "Targeting"}
-                      </th>
-                    )}
-                    {visibleColumns.status && (
-                      <th
-                        className="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
-                        onClick={() => handleSort("status")}
-                      >
-                        <div className="flex items-center justify-center gap-1">
-                          {isThai ? "สถานะ" : "Status"}
-                          {sortConfig?.key === "status" ? (
-                            sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
-                          ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
-                        </div>
-                      </th>
-                    )}
-                    {visibleColumns.result && (
-                      <th
-                        className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
-                        onClick={() => handleSort("result")}
-                      >
-                        <div className="flex items-center justify-end gap-1">
-                          {isThai ? "ผลลัพธ์" : "Results"}
-                          {sortConfig?.key === "result" ? (
-                            sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
-                          ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
-                        </div>
-                      </th>
-                    )}
-                    {visibleColumns.spend && (
-                      <th
-                        className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
-                        onClick={() => handleSort("spend")}
-                      >
-                        <div className="flex items-center justify-end gap-1">
-                          {isThai ? "ค่าใช้จ่าย" : "Spend"}
-                          {sortConfig?.key === "spend" ? (
-                            sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
-                          ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
-                        </div>
-                      </th>
-                    )}
-                    {visibleColumns.cpr && (
-                      <th
-                        className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
-                        onClick={() => handleSort("cpr")}
-                      >
-                        <div className="flex items-center justify-end gap-1">
-                          {isThai ? "ต้นทุนต่อผลลัพธ์" : "Cost / result"}
-                          {sortConfig?.key === "cpr" ? (
-                            sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
-                          ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
-                        </div>
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...filteredAds].sort((a, b) => {
-                    if (!sortConfig) return 0;
-                    const { key, direction } = sortConfig;
-                    const mod = direction === "desc" ? -1 : 1;
-                    if (key === "result") return (a.result - b.result) * mod;
-                    if (key === "spend") return (a.spend - b.spend) * mod;
-                    if (key === "cpr") return (a.costPerResult - b.costPerResult) * mod;
-                    if (key === "status") {
-                      const statA = formatStatus(a.status, a.spend);
-                      const statB = formatStatus(b.status, b.spend);
-                      return statA.localeCompare(statB) * mod;
-                    }
-                    return 0;
-                  }).map((ad, idx) => (
-                    <tr
-                      key={ad.id}
-                      className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
-                    >
-                      <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-                        {idx + 1}
-                      </td>
                       {visibleColumns.account && (
-                        <td className="px-3 py-2 text-left">
-                          <a
-                            href={ad.adsManagerUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-primary hover:underline transition-colors block truncate"
-                          >
-                            {ad.accountName}
-                          </a>
-                          <div
-                            className="text-xs text-gray-500 cursor-pointer hover:text-primary transition-colors w-fit mt-0.5"
-                            onClick={() => {
-                              navigator.clipboard.writeText(ad.accountId);
-                              toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
-                            }}
-                          >
-                            {ad.accountId}
-                          </div>
-                        </td>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                          {isThai ? "บัญชีโฆษณา" : "Ad account"}
+                        </th>
                       )}
                       {visibleColumns.adName && (
-                        <td className="p-[1px]">
-                          <div className="flex items-center gap-2">
-                            <div className="w-11 h-11 rounded-sm overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={ad.image}
-                                alt={ad.name}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <div className="min-w-0 py-1 pr-2">
-                              {ad.adPostUrl ? (
-                                <a
-                                  href={ad.adPostUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm font-normal text-gray-900 dark:text-gray-100 hover:text-primary hover:underline transition-colors block truncate"
-                                >
-                                  {ad.name}
-                                </a>
-                              ) : (
-                                <div className="text-sm font-normal text-gray-900 dark:text-gray-100 truncate">
-                                  {ad.name}
-                                </div>
-                              )}
-                              <div
-                                className="text-xs text-gray-500 cursor-pointer hover:text-primary transition-colors w-fit"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(ad.id);
-                                  toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
-                                }}
-                              >
-                                ID: {ad.id}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                          {isThai ? "ชื่อโฆษณา" : "Ad"}
+                        </th>
                       )}
                       {visibleColumns.page && (
-                        <td className="p-[1px]">
-                          <div className="flex flex-col justify-center h-full min-w-0 py-1 pl-2">
-                            <div className="text-sm font-normal text-gray-900 dark:text-gray-100 truncate">
-                              {ad.pageId ? (
-                                <a
-                                  href={`https://facebook.com/${ad.pageId}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="hover:text-primary hover:underline transition-colors block truncate"
-                                >
-                                  {ad.pageName ?? `Page ${ad.pageId}`}
-                                </a>
-                              ) : (
-                                ad.pageName ?? "—"
-                              )}
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                              {ad.pageUsername ? `@${ad.pageUsername}` : "—"}
-                            </div>
-                            {ad.pageId && (
-                              <div
-                                className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-primary transition-colors w-fit mt-0.5"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(ad.pageId!);
-                                  toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
-                                }}
-                              >
-                                ID: {ad.pageId}
-                              </div>
-                            )}
-                          </div>
-                        </td>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                          {isThai ? "เพจ" : "Page"}
+                        </th>
                       )}
                       {visibleColumns.targeting && (
-                        <td className="px-3 py-2">
-                          <div className="text-[11px] leading-snug text-gray-700 dark:text-gray-300 space-y-0.5">
-                            {ad.targeting.countries.length > 0 && (
-                              <div>
-                                <span className="font-medium text-gray-500">
-                                  {isThai ? "ประเทศ:" : "Countries:"}{" "}
-                                </span>
-                                {ad.targeting.countries.join(", ")}
-                              </div>
-                            )}
-                            {(ad.targeting.ageMin || ad.targeting.ageMax) && (
-                              <div>
-                                <span className="font-medium text-gray-500">
-                                  {isThai ? "อายุ:" : "Age:"}{" "}
-                                </span>
-                                {ad.targeting.ageMin ?? "?"}–{ad.targeting.ageMax ?? "?"}
-                              </div>
-                            )}
-                            {ad.targeting.interests.length > 0 && (
-                              <div className="flex items-start flex-wrap">
-                                <span className="font-medium text-gray-500 mr-1 whitespace-nowrap">
-                                  {isThai ? "ความสนใจ:" : "Interests:"}{" "}
-                                </span>
-                                <span className="inline-block truncate max-w-[120px]" title={ad.targeting.interests[0]}>
-                                  {ad.targeting.interests[0]}
-                                </span>
-                                {ad.targeting.interests.length > 1 && (
-                                  <Popover>
-                                    <PopoverTrigger className="ml-1 text-[10px] text-primary font-bold hover:underline whitespace-nowrap">
-                                      +{ad.targeting.interests.length - 1} {isThai ? "เพิ่มเติม" : "more"}
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[320px] p-4 z-[60] shadow-xl">
-                                      <div className="font-semibold text-sm mb-3 border-b pb-2 flex justify-between items-center text-gray-900 dark:text-gray-100">
-                                        <span>{isThai ? "ความสนใจทั้งหมด" : "All Interests"}</span>
-                                        <Badge variant="secondary" className="text-[10px] font-bold px-1.5 py-0">{ad.targeting.interests.length}</Badge>
-                                      </div>
-                                      <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto pr-2">
-                                        {ad.targeting.interests.map((int, i) => (
-                                          <Badge key={i} variant="outline" className="text-xs font-medium px-2 py-0.5 bg-gray-50/50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300">
-                                            {int}
-                                          </Badge>
-                                        ))}
-                                      </div>
-                                    </PopoverContent>
-                                  </Popover>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </td>
+                        <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide min-w-[180px]">
+                          {isThai ? "กลุ่มเป้าหมาย" : "Targeting"}
+                        </th>
                       )}
                       {visibleColumns.status && (
-                        <td className="px-3 py-2 text-left">
-                          <div className="flex items-center justify-start gap-2 text-[13px] font-medium text-gray-800 dark:text-gray-200">
-                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getStatusColor(ad.status, ad.spend)} shadow-sm`} />
-                            {formatStatus(ad.status, ad.spend)}
+                        <th
+                          className="px-3 py-2 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
+                          onClick={() => handleSort("status")}
+                        >
+                          <div className="flex items-center justify-center gap-1">
+                            {isThai ? "สถานะ" : "Status"}
+                            {sortConfig?.key === "status" ? (
+                              sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
+                            ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
                           </div>
-                        </td>
+                        </th>
                       )}
                       {visibleColumns.result && (
-                        <td className="px-3 py-2 text-right">
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {formatCurrency(ad.result)}
+                        <th
+                          className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
+                          onClick={() => handleSort("result")}
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            {isThai ? "ผลลัพธ์" : "Results"}
+                            {sortConfig?.key === "result" ? (
+                              sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
+                            ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
                           </div>
-                        </td>
+                        </th>
                       )}
                       {visibleColumns.spend && (
-                        <td className="px-3 py-2 text-right">
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {formatCurrency(ad.spend)}
+                        <th
+                          className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
+                          onClick={() => handleSort("spend")}
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            {isThai ? "ค่าใช้จ่าย" : "Spend"}
+                            {sortConfig?.key === "spend" ? (
+                              sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
+                            ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
                           </div>
-                        </td>
+                        </th>
                       )}
                       {visibleColumns.cpr && (
-                        <td className="px-3 py-2 text-right">
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {formatCurrency(ad.costPerResult)}
+                        <th
+                          className="px-3 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
+                          onClick={() => handleSort("cpr")}
+                        >
+                          <div className="flex items-center justify-end gap-1">
+                            {isThai ? "ต้นทุนต่อผลลัพธ์" : "Cost / result"}
+                            {sortConfig?.key === "cpr" ? (
+                              sortConfig.direction === "desc" ? <ArrowDown className="w-3 h-3 text-primary" /> : <ArrowUp className="w-3 h-3 text-primary" />
+                            ) : <ArrowUpDown className="w-3 h-3 opacity-30 group-hover:opacity-100 transition-opacity" />}
                           </div>
-                        </td>
+                        </th>
                       )}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {[...filteredAds].sort((a, b) => {
+                      if (!sortConfig) return 0;
+                      const { key, direction } = sortConfig;
+                      const mod = direction === "desc" ? -1 : 1;
+                      if (key === "result") return (a.result - b.result) * mod;
+                      if (key === "spend") return (a.spend - b.spend) * mod;
+                      if (key === "cpr") return (a.costPerResult - b.costPerResult) * mod;
+                      if (key === "status") {
+                        const statA = formatStatus(a.status, a.spend);
+                        const statB = formatStatus(b.status, b.spend);
+                        return statA.localeCompare(statB) * mod;
+                      }
+                      return 0;
+                    }).map((ad, idx) => (
+                      <tr
+                        key={ad.id}
+                        className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
+                      >
+                        <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                          {idx + 1}
+                        </td>
+                        {visibleColumns.account && (
+                          <td className="px-3 py-2 text-left">
+                            <a
+                              href={ad.adsManagerUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-medium text-gray-900 dark:text-gray-100 hover:text-primary hover:underline transition-colors block truncate"
+                            >
+                              {ad.accountName}
+                            </a>
+                            <div
+                              className="text-xs text-gray-500 cursor-pointer hover:text-primary transition-colors w-fit mt-0.5"
+                              onClick={() => {
+                                navigator.clipboard.writeText(ad.accountId);
+                                toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
+                              }}
+                            >
+                              {ad.accountId}
+                            </div>
+                          </td>
+                        )}
+                        {visibleColumns.adName && (
+                          <td className="p-[1px]">
+                            <div className="flex items-center gap-2">
+                              <div className="w-11 h-11 rounded-sm overflow-hidden bg-gray-100 dark:bg-gray-800 flex-shrink-0">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={ad.image}
+                                  alt={ad.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <div className="min-w-0 py-1 pr-2">
+                                {ad.adPostUrl ? (
+                                  <a
+                                    href={ad.adPostUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sm font-normal text-gray-900 dark:text-gray-100 hover:text-primary hover:underline transition-colors block truncate"
+                                  >
+                                    {ad.name}
+                                  </a>
+                                ) : (
+                                  <div className="text-sm font-normal text-gray-900 dark:text-gray-100 truncate">
+                                    {ad.name}
+                                  </div>
+                                )}
+                                <div
+                                  className="text-xs text-gray-500 cursor-pointer hover:text-primary transition-colors w-fit"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(ad.id);
+                                    toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
+                                  }}
+                                >
+                                  ID: {ad.id}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        )}
+                        {visibleColumns.page && (
+                          <td className="p-[1px]">
+                            <div className="flex flex-col justify-center h-full min-w-0 py-1 pl-2">
+                              <div className="text-sm font-normal text-gray-900 dark:text-gray-100 truncate">
+                                {ad.pageId ? (
+                                  <a
+                                    href={`https://facebook.com/${ad.pageId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="hover:text-primary hover:underline transition-colors block truncate"
+                                  >
+                                    {ad.pageName ?? `Page ${ad.pageId}`}
+                                  </a>
+                                ) : (
+                                  ad.pageName ?? "—"
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                                {ad.pageUsername ? `@${ad.pageUsername}` : "—"}
+                              </div>
+                              {ad.pageId && (
+                                <div
+                                  className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-primary transition-colors w-fit mt-0.5"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(ad.pageId!);
+                                    toast.success(isThai ? "คัดลอกแล้ว" : "Copied to clipboard");
+                                  }}
+                                >
+                                  ID: {ad.pageId}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                        {visibleColumns.targeting && (
+                          <td className="px-3 py-2">
+                            <div className="text-[11px] leading-snug text-gray-700 dark:text-gray-300 space-y-0.5">
+                              {ad.targeting.countries.length > 0 && (
+                                <div>
+                                  <span className="font-medium text-gray-500">
+                                    {isThai ? "ประเทศ:" : "Countries:"}{" "}
+                                  </span>
+                                  {ad.targeting.countries.join(", ")}
+                                </div>
+                              )}
+                              {(ad.targeting.ageMin || ad.targeting.ageMax) && (
+                                <div>
+                                  <span className="font-medium text-gray-500">
+                                    {isThai ? "อายุ:" : "Age:"}{" "}
+                                  </span>
+                                  {ad.targeting.ageMin ?? "?"}–{ad.targeting.ageMax ?? "?"}
+                                </div>
+                              )}
+                              {ad.targeting.interests.length > 0 && (
+                                <div className="flex items-start flex-wrap">
+                                  <span className="font-medium text-gray-500 mr-1 whitespace-nowrap">
+                                    {isThai ? "ความสนใจ:" : "Interests:"}{" "}
+                                  </span>
+                                  <span className="inline-block truncate max-w-[120px]" title={ad.targeting.interests[0]}>
+                                    {ad.targeting.interests[0]}
+                                  </span>
+                                  {ad.targeting.interests.length > 1 && (
+                                    <Popover>
+                                      <PopoverTrigger className="ml-1 text-[10px] text-primary font-bold hover:underline whitespace-nowrap">
+                                        +{ad.targeting.interests.length - 1} {isThai ? "เพิ่มเติม" : "more"}
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-[320px] p-4 z-[60] shadow-xl">
+                                        <div className="font-semibold text-sm mb-3 border-b pb-2 flex justify-between items-center text-gray-900 dark:text-gray-100">
+                                          <span>{isThai ? "ความสนใจทั้งหมด" : "All Interests"}</span>
+                                          <Badge variant="secondary" className="text-[10px] font-bold px-1.5 py-0">{ad.targeting.interests.length}</Badge>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 max-h-64 overflow-y-auto pr-2">
+                                          {ad.targeting.interests.map((int, i) => (
+                                            <Badge key={i} variant="outline" className="text-xs font-medium px-2 py-0.5 bg-gray-50/50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300">
+                                              {int}
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      </PopoverContent>
+                                    </Popover>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                        {visibleColumns.status && (
+                          <td className="px-3 py-2 text-left">
+                            <div className="flex items-center justify-start gap-2 text-[13px] font-medium text-gray-800 dark:text-gray-200">
+                              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${getStatusColor(ad.status, ad.spend)} shadow-sm`} />
+                              {formatStatus(ad.status, ad.spend)}
+                            </div>
+                          </td>
+                        )}
+                        {visibleColumns.result && (
+                          <td className="px-3 py-2 text-right">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              {formatCurrency(ad.result)}
+                            </div>
+                          </td>
+                        )}
+                        {visibleColumns.spend && (
+                          <td className="px-3 py-2 text-right">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              {formatCurrency(ad.spend)}
+                            </div>
+                          </td>
+                        )}
+                        {visibleColumns.cpr && (
+                          <td className="px-3 py-2 text-right">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              {formatCurrency(ad.costPerResult)}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-gray-800">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {isThai ? "กำลังแสดง" : "Showing"}{" "}
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {Math.min((currentPage - 1) * rowsPerPage + 1, sortedAds.length)}
+                    </span>{" "}
+                    {isThai ? "ถึง" : "to"}{" "}
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {Math.min(currentPage * rowsPerPage, sortedAds.length)}
+                    </span>{" "}
+                    {isThai ? "จาก" : "of"}{" "}
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {sortedAds.length}
+                    </span>{" "}
+                    {isThai ? "รายการ" : "results"}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      {isThai ? "ก่อนหน้า" : "Previous"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      {isThai ? "ถัดไป" : "Next"}
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
-      </Card >
-    </div >
+      </Card>
+    </div>
   );
 }
-
