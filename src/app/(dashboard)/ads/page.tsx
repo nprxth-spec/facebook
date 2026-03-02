@@ -640,6 +640,45 @@ export default function AdsPage() {
 
   const [managerAccounts, setManagerAccounts] = useState<{ id: string; name: string }[]>([]);
 
+  const formatStatus = (s: string, spend: number) => {
+    const k = s.toUpperCase();
+    const hasStats = spend > 0;
+
+    if (["ACTIVE"].includes(k) || k === "ACTIVE") return isThai ? "กำลังใช้งาน" : "Active";
+    if (["PENDING_REVIEW", "IN_PROCESS", "PREAPPROVED"].includes(k)) return isThai ? "กำลังตรวจสอบ" : "Review";
+    if (["PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"].includes(k)) return isThai ? "ปิดโฆษณา/หยุดชั่วคราว" : "Ads off";
+    if (["DISAPPROVED"].includes(k)) {
+      return hasStats
+        ? (isThai ? "ถูกปฏิเสธ (Inactive)" : "Inactive(Content)")
+        : (isThai ? "ถูกปฏิเสธ" : "Fail(Content)");
+    }
+    if (["WITH_ISSUES", "ADACCOUNT_DISABLED", "CAMPAIGN_GROUP_DISABLED", "NO_CREDIT_CARD_ERROR"].includes(k)) {
+      return hasStats
+        ? (isThai ? "เกิดข้อผิดพลาดในการแสดงโฆษณา (Inactive)" : "Inactive(Acc/Page)")
+        : (isThai ? "เกิดข้อผิดพลาดในการแสดงโฆษณา" : "Fail(Acc/Page)");
+    }
+    if (["DELETED", "ARCHIVED"].includes(k)) return isThai ? "ลบแล้ว" : "Deleted";
+
+    // Fallback original parsing just in case
+    const low = s.toLowerCase();
+    if (low.includes("active")) return isThai ? "กำลังใช้งาน" : "Active";
+    if (low.includes("paused")) return isThai ? "ปิดโฆษณา/หยุดชั่วคราว" : "Ads off";
+    if (low.includes("deleted")) return isThai ? "ลบแล้ว" : "Deleted";
+
+    return s || "Review";
+  };
+
+  const getStatusColor = (s: string, spend: number) => {
+    const formatted = formatStatus(s, spend);
+    if (formatted.includes("กำลังใช้งาน") || formatted === "Active") return "bg-green-500";
+    if (formatted.includes("กำลังตรวจสอบ") || formatted === "Review") return "bg-blue-500";
+    if (formatted.includes("ปิดโฆษณา") || formatted === "Ads off") return "bg-gray-400";
+    if (formatted.includes("ถูกปฏิเสธ") || formatted.includes("Fail(Content)")) return "bg-red-500";
+    if (formatted.includes("เกิดข้อผิดพลาด") || formatted.includes("Fail(Acc/Page)")) return "bg-red-500";
+    if (formatted.includes("Inactive")) return "bg-orange-500";
+    if (formatted.includes("ลบแล้ว") || formatted === "Deleted") return "bg-red-700";
+    return "bg-slate-400";
+  };
   const filteredAds = useMemo(() => {
     if (!selectedAccounts.length) return ads;
     return ads.filter(ad => selectedAccounts.includes(ad.accountId) || selectedAccounts.includes(`act_${ad.accountId}`));
@@ -780,45 +819,6 @@ export default function AdsPage() {
   const formatCurrency = (v: number | null | undefined) =>
     (Number(v) || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
-  const formatStatus = (s: string, spend: number) => {
-    const k = s.toUpperCase();
-    const hasStats = spend > 0;
-
-    if (["ACTIVE"].includes(k) || k === "ACTIVE") return isThai ? "กำลังใช้งาน" : "Active";
-    if (["PENDING_REVIEW", "IN_PROCESS", "PREAPPROVED"].includes(k)) return isThai ? "กำลังตรวจสอบ" : "Review";
-    if (["PAUSED", "CAMPAIGN_PAUSED", "ADSET_PAUSED"].includes(k)) return isThai ? "ปิดโฆษณา/หยุดชั่วคราว" : "Ads off";
-    if (["DISAPPROVED"].includes(k)) {
-      return hasStats
-        ? (isThai ? "ถูกปฏิเสธ (Inactive)" : "Inactive(Content)")
-        : (isThai ? "ถูกปฏิเสธ" : "Fail(Content)");
-    }
-    if (["WITH_ISSUES", "ADACCOUNT_DISABLED", "CAMPAIGN_GROUP_DISABLED", "NO_CREDIT_CARD_ERROR"].includes(k)) {
-      return hasStats
-        ? (isThai ? "เกิดข้อผิดพลาดในการแสดงโฆษณา (Inactive)" : "Inactive(Acc/Page)")
-        : (isThai ? "เกิดข้อผิดพลาดในการแสดงโฆษณา" : "Fail(Acc/Page)");
-    }
-    if (["DELETED", "ARCHIVED"].includes(k)) return isThai ? "ลบแล้ว" : "Deleted";
-
-    // Fallback original parsing just in case
-    const low = s.toLowerCase();
-    if (low.includes("active")) return isThai ? "กำลังใช้งาน" : "Active";
-    if (low.includes("paused")) return isThai ? "ปิดโฆษณา/หยุดชั่วคราว" : "Ads off";
-    if (low.includes("deleted")) return isThai ? "ลบแล้ว" : "Deleted";
-
-    return s || "Review";
-  };
-
-  const getStatusColor = (s: string, spend: number) => {
-    const formatted = formatStatus(s, spend);
-    if (formatted.includes("กำลังใช้งาน") || formatted === "Active") return "bg-green-500";
-    if (formatted.includes("กำลังตรวจสอบ") || formatted === "Review") return "bg-blue-500";
-    if (formatted.includes("ปิดโฆษณา") || formatted === "Ads off") return "bg-gray-400";
-    if (formatted.includes("ถูกปฏิเสธ") || formatted.includes("Fail(Content)")) return "bg-red-500";
-    if (formatted.includes("เกิดข้อผิดพลาด") || formatted.includes("Fail(Acc/Page)")) return "bg-red-500";
-    if (formatted.includes("Inactive")) return "bg-orange-500";
-    if (formatted.includes("ลบแล้ว") || formatted === "Deleted") return "bg-red-700";
-    return "bg-slate-400";
-  };
 
   return (
     <div className="space-y-6">
