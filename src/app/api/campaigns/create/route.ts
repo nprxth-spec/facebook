@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
             const campaignBody: Record<string, unknown> = {
                 name: `Auto Campaign ${c + 1} - ${new Date().toLocaleDateString("th-TH")}`,
                 objective: campaignObjective,
-                status: "PAUSED",
+                status: "ACTIVE",
                 special_ad_categories: [],
                 is_adset_budget_sharing_enabled: false,
                 access_token: token,
@@ -278,7 +278,7 @@ export async function POST(req: NextRequest) {
                     billing_event: goalConfig.billingEvent,
                     bid_strategy: "LOWEST_COST_WITHOUT_CAP",
                     daily_budget: dailyBudget,
-                    status: "PAUSED",
+                    status: "ACTIVE",
                     targeting,
                     access_token: token,
                 };
@@ -450,7 +450,7 @@ export async function POST(req: NextRequest) {
                             name: `Ad ${a + 1} - Auto`,
                             adset_id: adSetData.id,
                             creative: { creative_id: creativeData.id },
-                            status: "PAUSED",
+                            status: "ACTIVE",
                             access_token: token,
                         }),
                     });
@@ -466,7 +466,7 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            message: `✅ สร้างแคมเปญสำเร็จ! (PAUSED)\n📊 โครงสร้าง: ${campaignCount} Campaign × ${adSetCount} AdSet × ${adsCount} Ad`,
+            message: `✅ สร้างแคมเปญสำเร็จ! (ACTIVE)\n📊 โครงสร้าง: ${campaignCount} Campaign × ${adSetCount} AdSet × ${adsCount} Ad`,
             campaignId: campaignIds[0],
             structure: { campaigns: campaignIds.length, adSets: adSetIds.length, ads: adIds.length },
         });

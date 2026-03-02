@@ -250,10 +250,20 @@ export async function GET(req: Request) {
 
       let resultValue = 0;
       let costPerResult = 0;
+      let specificResultFound = false;
 
       const resultAction = actions.find((a: any) => a.action_type === "offsite_conversion") ?? null;
       if (resultAction) {
         resultValue = Number(resultAction.value ?? 0);
+        specificResultFound = true;
+      } else if (ad.objective === "MESSAGES" || ad.adset?.optimization_goal === "CONVERSATIONS") {
+        const found = actions.find(
+          (a: any) =>
+            a.action_type === "onsite_conversion.messaging_conversation_started_7d" ||
+            a.action_type === "messaging_conversation_started_7d"
+        );
+        resultValue = found ? Number(found.value ?? 0) : 0;
+        specificResultFound = true;
       } else if (ad.objective && ad.objective !== "POST_ENGAGEMENT") {
         const priorityActions = [
           "onsite_conversion.messaging_conversation_started_7d",
@@ -264,11 +274,15 @@ export async function GET(req: Request) {
         ];
         for (const actionType of priorityActions) {
           const found = actions.find((a: any) => a.action_type === actionType);
-          if (found) { resultValue = Number(found.value ?? 0); break; }
+          if (found) {
+            resultValue = Number(found.value ?? 0);
+            specificResultFound = true;
+            break;
+          }
         }
       }
 
-      if (!resultValue) {
+      if (!specificResultFound && !resultValue) {
         resultValue = clicks || impressions;
       }
 

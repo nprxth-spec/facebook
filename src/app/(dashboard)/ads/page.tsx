@@ -15,6 +15,8 @@ import {
   ArrowUp,
   ArrowUpDown,
   Calendar,
+  Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -22,6 +24,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import {
@@ -65,6 +68,109 @@ const DAYS = [
   { id: 5, labelTh: "ศ", labelEn: "Fr" },
   { id: 6, labelTh: "ส", labelEn: "Sa" },
 ];
+
+function MultiSelectDropdown({
+  options, selected, onChange, placeholder, isThai
+}: {
+  options: { id: string; name: string }[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+  placeholder: string;
+  isThai: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const filtered = options.filter(
+    (o) => o.name.toLowerCase().includes(search.toLowerCase()) || o.id.includes(search)
+  );
+  const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex items-center justify-between w-full h-10 px-3 text-sm border rounded-lg bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-primary transition-colors focus:outline-none"
+      >
+        <span className={cn("truncate", !selected.length && "text-gray-400")}>
+          {!selected.length
+            ? placeholder
+            : selected.length === 1
+              ? options.find((o) => o.id === selected[0])?.name
+              : isThai ? `${selected.length} บัญชีที่เลือก` : `${selected.length} selected`}
+        </span>
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          {!!selected.length && (
+            <span onClick={(e) => { e.stopPropagation(); onChange([]); }} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+              <X className="w-3.5 h-3.5" />
+            </span>
+          )}
+          <ChevronDown className={cn("w-4 h-4 text-gray-400 transition-transform", open && "rotate-180")} />
+        </div>
+      </button>
+
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg">
+          <div className="p-2 border-b border-gray-100 dark:border-gray-700">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input
+                type="text"
+                placeholder={isThai ? "ค้นหาบัญชี..." : "Search accounts..."}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-primary text-gray-900 dark:text-gray-100 placeholder:text-gray-400"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          </div>
+          <div className="flex justify-between items-center px-3 py-1.5 border-b border-gray-100 dark:border-gray-700 text-xs">
+            <div className="flex gap-2">
+              <button onClick={() => onChange(filtered.map((o) => o.id))} className="text-primary hover:underline">{isThai ? "เลือกทั้งหมด" : "Select all"}</button>
+              <span className="text-gray-300">|</span>
+              <button onClick={() => onChange([])} className="text-gray-500 hover:underline">{isThai ? "ยกเลิก" : "Clear"}</button>
+            </div>
+            <button onClick={() => setOpen(false)} className="text-blue-600 hover:text-blue-700 font-medium px-2.5 py-1 rounded-md bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 transition-colors">{isThai ? "ตกลง" : "Done"}</button>
+          </div>
+          <div className="max-h-52 overflow-y-auto p-1">
+            {filtered.map((opt) => (
+              <div
+                key={opt.id}
+                onClick={() => toggle(opt.id)}
+                className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+              >
+                <div
+                  className={cn(
+                    "w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                    selected.includes(opt.id)
+                      ? "bg-primary border-primary"
+                      : "border-gray-300 dark:border-gray-500",
+                  )}
+                >
+                  {selected.includes(opt.id) && <Check className="w-3 h-3 text-white" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-gray-900 dark:text-gray-100 truncate">
+                    {opt.name}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function MiniCalendar({
   start,
@@ -416,7 +522,7 @@ export default function AdsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [fromDateCustom, setFromDateCustom] = useState<Date | null>(null);
   const [toDateCustom, setToDateCustom] = useState<Date | null>(null);
-  const [selectedAccount, setSelectedAccount] = useState<string>("all");
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [visibleColumns, setVisibleColumns] = useState({
     account: true,
     adName: true,
@@ -445,8 +551,13 @@ export default function AdsPage() {
       setFromDateCustom(initialFrom);
       setToDateCustom(initialTo);
 
-      const savedAccount = localStorage.getItem("ads_selectedAccount");
-      if (savedAccount) setSelectedAccount(savedAccount);
+      const savedAccounts = localStorage.getItem("ads_selectedAccounts");
+      if (savedAccounts) {
+        try {
+          const parsed = JSON.parse(savedAccounts);
+          if (Array.isArray(parsed)) setSelectedAccounts(parsed);
+        } catch (e) { }
+      }
 
       const savedCols = localStorage.getItem("ads_visibleColumns");
       if (savedCols) {
@@ -472,7 +583,7 @@ export default function AdsPage() {
   useEffect(() => {
     if (!isHydrated) return;
     fetchAds();
-  }, [debouncedSearch, selectedAccount, isHydrated]);
+  }, [debouncedSearch, selectedAccounts, isHydrated]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -499,8 +610,8 @@ export default function AdsPage() {
 
   useEffect(() => {
     if (!isHydrated) return;
-    localStorage.setItem("ads_selectedAccount", selectedAccount);
-  }, [selectedAccount, isHydrated]);
+    localStorage.setItem("ads_selectedAccounts", JSON.stringify(selectedAccounts));
+  }, [selectedAccounts, isHydrated]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -516,8 +627,9 @@ export default function AdsPage() {
   const [managerAccounts, setManagerAccounts] = useState<{ id: string; name: string }[]>([]);
 
   const filteredAds = useMemo(() => {
-    return ads.filter(ad => selectedAccount === "all" || ad.accountId === selectedAccount);
-  }, [ads, selectedAccount]);
+    if (!selectedAccounts.length) return ads;
+    return ads.filter(ad => selectedAccounts.includes(ad.accountId) || selectedAccounts.includes(`act_${ad.accountId}`));
+  }, [ads, selectedAccounts]);
 
   const handleSort = (key: string) => {
     let direction: "asc" | "desc" = "desc";
@@ -698,23 +810,17 @@ export default function AdsPage() {
               </div>
             </div>
 
-            <div className="w-full md:w-56 space-y-1">
+            <div className="w-full md:w-64 space-y-1 z-30">
               <label className="text-xs font-medium text-gray-600 dark:text-gray-300">
                 {isThai ? "บัญชีโฆษณา" : "Ad account"}
               </label>
-              <Select value={selectedAccount} onValueChange={setSelectedAccount}>
-                <SelectTrigger className="h-10 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
-                  <SelectValue placeholder={isThai ? "ทั้งหมด" : "All Accounts"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{isThai ? "ทุกบัญชีโฆษณา" : "All Accounts"}</SelectItem>
-                  {managerAccounts.map((acc) => (
-                    <SelectItem key={acc.id} value={acc.id}>
-                      {acc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelectDropdown
+                options={managerAccounts}
+                selected={selectedAccounts}
+                onChange={setSelectedAccounts}
+                placeholder={isThai ? "ทุกบัญชีโฆษณา" : "All Accounts"}
+                isThai={isThai}
+              />
             </div>
 
             <div className="w-full md:w-64 space-y-1" ref={calRef}>
@@ -996,7 +1102,18 @@ export default function AdsPage() {
                         <td className="p-[1px]">
                           <div className="flex flex-col justify-center h-full min-w-0 py-1 pl-2">
                             <div className="text-sm font-normal text-gray-900 dark:text-gray-100 truncate">
-                              {ad.pageName ?? (ad.pageId ? `Page ${ad.pageId}` : "—")}
+                              {ad.pageId ? (
+                                <a
+                                  href={`https://facebook.com/${ad.pageId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="hover:text-primary hover:underline transition-colors block truncate"
+                                >
+                                  {ad.pageName ?? `Page ${ad.pageId}`}
+                                </a>
+                              ) : (
+                                ad.pageName ?? "—"
+                              )}
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
                               {ad.pageUsername ? `@${ad.pageUsername}` : "—"}

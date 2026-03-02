@@ -2,7 +2,7 @@ export const translations = {
     th: {
         sidebar: {
             dashboard: "แดชบอร์ด",
-            export: "ส่งออกข้อมูล",
+            export: "ส่งออกข้อมูลสถิติ",
             export_ads: "ส่งออกข้อมูลโฆษณา",
             ads: "โฆษณา",
             create: "สร้างโฆษณา",

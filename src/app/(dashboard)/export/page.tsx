@@ -239,17 +239,20 @@ function MultiSelectDropdown({
               />
             </div>
           </div>
-          <div className="flex gap-2 px-3 py-1.5 border-b border-gray-100 dark:border-gray-700 text-xs">
-            <button onClick={() => onChange(filtered.map((o) => o.id))} className="text-primary hover:underline">
-              {t("export.selectAll")}
-            </button>
-            <span className="text-gray-300">|</span>
-            <button onClick={() => onChange([])} className="text-gray-500 hover:underline">
-              {t("export.clear")}
-            </button>
-            {!!selected.length && (
-              <span className="ml-auto text-gray-500">{selected.length} {t("common.selected") || (t("export.selected") || "เลือก")}</span>
-            )}
+          <div className="flex justify-between items-center px-3 py-1.5 border-b border-gray-100 dark:border-gray-700 text-xs">
+            <div className="flex gap-2 items-center">
+              <button onClick={() => onChange(filtered.map((o) => o.id))} className="text-primary hover:underline">
+                {t("export.selectAll")}
+              </button>
+              <span className="text-gray-300">|</span>
+              <button onClick={() => onChange([])} className="text-gray-500 hover:underline">
+                {t("export.clear")}
+              </button>
+              {!!selected.length && (
+                <span className="text-gray-500 ml-1">{selected.length} {t("common.selected") || (t("export.selected") || "เลือก")}</span>
+              )}
+            </div>
+            <button onClick={() => setOpen(false)} className="text-blue-600 hover:text-blue-700 font-medium px-2.5 py-1 rounded-md bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 transition-colors">ตกลง</button>
           </div>
           <div className="max-h-52 overflow-y-auto p-1">
             {filtered.length === 0 ? (

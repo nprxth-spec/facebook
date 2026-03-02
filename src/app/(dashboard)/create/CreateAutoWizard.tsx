@@ -93,7 +93,7 @@ export default function CreateAutoWizard() {
     const [campaignCount, setCampaignCount] = useState(1);
     const [adSetCount, setAdSetCount] = useState(1);
     const [adsCount, setAdsCount] = useState(1);
-    const [placements, setPlacements] = useState(["facebook"]);
+    const [placements, setPlacements] = useState(["facebook", "messenger"]);
     const [ageMin, setAgeMin] = useState(20);
     const [ageMax, setAgeMax] = useState(50);
     const [manualInterests, setManualInterests] = useState<Interest[]>([]);
@@ -102,8 +102,11 @@ export default function CreateAutoWizard() {
 
     const [primaryText, setPrimaryText] = useState("");
     const [headline, setHeadline] = useState("");
-    const [greeting, setGreeting] = useState("");
-    const [iceBreakers, setIceBreakers] = useState<IceBreaker[]>([{ question: "", payload: "" }]);
+    const [greeting, setGreeting] = useState(isThai ? "สวัสดีครับ มีอะไรให้เราช่วยไหมครับ? 👋" : "Hi! How can we help you? 👋");
+    const [iceBreakers, setIceBreakers] = useState<IceBreaker[]>([{
+        question: isThai ? "สนใจสินค้าครับ" : "I'm interested in this product",
+        payload: "สนใจสินค้าครับ"
+    }]);
 
     // ── Media ────
     const [adSource, setAdSource] = useState<"upload" | "library">("upload");
@@ -114,9 +117,61 @@ export default function CreateAutoWizard() {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // ── Templates ────
-    const [templates, setTemplates] = useState<any[]>([]);
+    const [templates, setTemplates] = useState<any[]>([]); // Facebook templates
+    const [localTemplates, setLocalTemplates] = useState<any[]>([]); // Locally saved templates
     const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
     const [templatesLoading, setTemplatesLoading] = useState(false);
+    const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+    const [newTemplateName, setNewTemplateName] = useState("");
+
+    const handleSaveTemplate = async () => {
+        if (!newTemplateName.trim()) {
+            toast.error(isThai ? "กรุณาใส่ชื่อเทมเพลต" : "Please enter a template name");
+            return;
+        }
+        setIsSavingTemplate(true);
+        try {
+            const res = await fetch("/api/messenger-templates", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: newTemplateName,
+                    greeting,
+                    iceBreakers: iceBreakers.filter(ib => ib.question.trim() !== "")
+                })
+            });
+            const data = await res.json();
+            if (data.id) {
+                setLocalTemplates([data, ...localTemplates]);
+                setNewTemplateName("");
+                setSelectedTemplateId(data.id);
+                toast.success(isThai ? "บันทึกเทมเพลตสำเร็จ" : "Template saved successfully");
+            } else {
+                toast.error(data.error || "Failed to save template");
+            }
+        } catch (error) {
+            toast.error("Error saving template");
+        } finally {
+            setIsSavingTemplate(false);
+        }
+    };
+
+    const handleDeleteTemplate = async (id: string, e: React.MouseEvent | React.PointerEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!confirm(isThai ? "ยืนยันการลบเทมเพลต?" : "Are you sure you want to delete this template?")) return;
+        try {
+            const res = await fetch(`/api/messenger-templates/${id}`, { method: "DELETE" });
+            const data = await res.json();
+            if (data.success) {
+                setLocalTemplates(localTemplates.filter(t => t.id !== id));
+                if (selectedTemplateId === id) setSelectedTemplateId("manual");
+                toast.success(isThai ? "ลบเทมเพลตสำเร็จ" : "Template deleted");
+            }
+        } catch (error) {
+            toast.error("Error deleting template");
+        }
+    };
 
     // ── AI Analysis ────
     const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -144,6 +199,14 @@ export default function CreateAutoWizard() {
             setAdAccounts(Array.isArray(accData) ? accData.filter((a: any) => a.isActive) : []);
             setPages(Array.isArray(pageData) ? pageData.filter((p: any) => p.isActive) : []);
         }).finally(() => setLoadingData(false));
+
+        // Load local templates
+        fetch("/api/messenger-templates")
+            .then(r => r.json())
+            .then(data => {
+                if (Array.isArray(data)) setLocalTemplates(data);
+            })
+            .catch(console.error);
     }, []);
 
     useEffect(() => {
@@ -376,12 +439,21 @@ export default function CreateAutoWizard() {
             fd.append("ageMax", String(ageMax));
             if (primaryText) fd.append("primaryText", primaryText);
             if (headline) fd.append("headline", headline);
+            if (manualInterests.length > 0) fd.append("manualInterests", JSON.stringify(manualInterests));
             if (useExclusion && exclusionAudienceIds.length > 0) fd.append("exclusionAudienceIds", JSON.stringify(exclusionAudienceIds));
 
             // Templates vs Manual Icebreakers
-            if (selectedTemplateId && selectedTemplateId !== "manual") {
+            const t = localTemplates.find((x) => x.id === selectedTemplateId);
+            if (t) {
+                // Local template: send as raw fields so backend builds a new inline template for the ad
+                if (t.greeting) fd.append("greeting", t.greeting);
+                const validIce = t.iceBreakers.filter((ib: any) => ib.question.trim());
+                if (validIce.length > 0) fd.append("iceBreakers", JSON.stringify(validIce));
+            } else if (selectedTemplateId && selectedTemplateId !== "manual") {
+                // FB template: send ID
                 fd.append("templateId", selectedTemplateId);
             } else {
+                // Manual setup
                 const validIce = iceBreakers.filter((ib) => ib.question.trim());
                 if (validIce.length > 0) fd.append("iceBreakers", JSON.stringify(validIce));
                 if (greeting) fd.append("greeting", greeting);
@@ -882,77 +954,143 @@ export default function CreateAutoWizard() {
                         </div>
                     </div>
 
-                    {placements.includes("messenger") && (
-                        <>
-                            <Separator className="my-5" />
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <MessageCircle className="h-4 w-4 text-blue-500" />
-                                    <span className="text-sm font-semibold">{isThai ? "ข้อความแชท (Messenger)" : "Messenger Template"}</span>
-                                    {templatesLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground ml-2" />}
-                                </div>
+                    <Separator className="my-5" />
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                            <MessageCircle className="h-4 w-4 text-blue-500" />
+                            <span className="text-sm font-semibold">{isThai ? "ข้อความแชท (Messenger)" : "Messenger Template"}</span>
+                            {templatesLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground ml-2" />}
+                        </div>
 
-                                {templates.length > 0 ? (
-                                    <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
-                                        <div className="space-y-1.5">
-                                            <Label>{isThai ? "เลือกเทมเพลตที่บันทึกไว้" : "Select saved template"}</Label>
-                                            <Select value={selectedTemplateId || "manual"} onValueChange={setSelectedTemplateId}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder={isThai ? "เลือกการตั้งค่าแชท..." : "Select chat setup..."} />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="manual" className="font-semibold text-blue-600 dark:text-blue-400">
-                                                        {isThai ? "+ สร้างใหม่ (กำหนดเอง)" : "+ Create New (Manual)"}
-                                                    </SelectItem>
+                        {templates.length > 0 || localTemplates.length > 0 ? (
+                            <div className="space-y-3 border rounded-lg p-4 bg-muted/20">
+                                <div className="space-y-1.5">
+                                    <Label>{isThai ? "เลือกเทมเพลตที่บันทึกไว้" : "Select saved template"}</Label>
+                                    <Select value={selectedTemplateId || "manual"} onValueChange={(val) => {
+                                        setSelectedTemplateId(val);
+                                        if (val === "manual") return;
+
+                                        // Check local templates first
+                                        const local = localTemplates.find(t => t.id === val);
+                                        if (local) {
+                                            setGreeting(local.greeting);
+                                            setIceBreakers(local.iceBreakers.length > 0 ? local.iceBreakers : [{ question: "", payload: "" }]);
+                                            return;
+                                        }
+
+                                        // Check FB templates
+                                        const fb = templates.find(t => t.id === val);
+                                        if (fb) {
+                                            // Handle FB template mapping if needed
+                                        }
+                                    }}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={isThai ? "เลือกการตั้งค่าแชท..." : "Select chat setup..."} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="manual" className="font-semibold text-blue-600 dark:text-blue-400">
+                                                {isThai ? "+ สร้างใหม่ (กำหนดเอง)" : "+ Create New (Manual)"}
+                                            </SelectItem>
+
+                                            {localTemplates.length > 0 && (
+                                                <>
+                                                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase bg-muted/30">
+                                                        {isThai ? "เทมเพลตที่บันทึกไว้" : "Saved Local Templates"}
+                                                    </div>
+                                                    {localTemplates.map(t => (
+                                                        <div key={t.id} className="relative group/item">
+                                                            <SelectItem value={t.id}>{t.name}</SelectItem>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 opacity-0 group-hover/item:opacity-100 transition-opacity z-50 hover:bg-destructive/10"
+                                                                onPointerDown={(e) => handleDeleteTemplate(t.id, e)}
+                                                                onClick={(e) => handleDeleteTemplate(t.id, e)}
+                                                            >
+                                                                <Trash2 className="h-3 w-3 text-destructive" />
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </>
+                                            )}
+
+                                            {templates.length > 0 && (
+                                                <>
+                                                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase bg-muted/30 mt-1">
+                                                        {isThai ? "เทมเพลตจาก Facebook" : "Facebook Templates"}
+                                                    </div>
                                                     {templates.map(t => (
                                                         <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                                                     ))}
-                                                </SelectContent>
-                                            </Select>
+                                                </>
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-xs text-muted-foreground mb-2">
+                                {isThai
+                                    ? "คุณสามารถสร้างเทมเพลตที่ใช้บ่อยได้ใน Ads Manager หรือทำการตั้งค่าข้อความต้อนรับใหม่ที่นี่"
+                                    : "You can create saved templates in Ads Manager, or configure a new welcome message here."}
+                            </div>
+                        )}
+
+                        {(!selectedTemplateId || selectedTemplateId === "manual" || localTemplates.some(t => t.id === selectedTemplateId)) && (
+                            <div className="space-y-3 mt-3">
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs">{isThai ? "ข้อความต้อนรับ" : "Greeting"}</Label>
+                                    <Input placeholder={isThai ? "สวัสดีครับ 👋" : "Hello! 👋"} value={greeting} onChange={(e) => { setGreeting(e.target.value); setSelectedTemplateId("manual"); }} />
+                                </div>
+                                <div className="space-y-2">
+                                    {iceBreakers.map((ib, idx) => (
+                                        <div key={idx} className="flex gap-2 items-end">
+                                            <div className="flex-1 space-y-1">
+                                                <Label className="text-xs">{isThai ? `คำถาม ${idx + 1}` : `Question ${idx + 1}`}</Label>
+                                                <Input placeholder={isThai ? "เช่น ดูสินค้าเพิ่มเติม" : "e.g. View products"} value={ib.question}
+                                                    onChange={(e) => { const u = [...iceBreakers]; u[idx] = { question: e.target.value, payload: e.target.value }; setIceBreakers(u); setSelectedTemplateId("manual"); }} />
+                                            </div>
+                                            {iceBreakers.length > 1 && <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => { setIceBreakers((p) => p.filter((_, i) => i !== idx)); setSelectedTemplateId("manual"); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
                                         </div>
-                                    </div>
-                                ) : (
-                                    <div className="text-xs text-muted-foreground mb-2">
-                                        {isThai
-                                            ? "คุณสามารถสร้างเทมเพลตที่ใช้บ่อยได้ใน Ads Manager หรือทำการตั้งค่าข้อความต้อนรับใหม่ที่นี่"
-                                            : "You can create saved templates in Ads Manager, or configure a new welcome message here."}
-                                    </div>
-                                )}
+                                    ))}
+                                    {iceBreakers.length < 5 && <Button variant="outline" size="sm" onClick={() => { setIceBreakers((p) => [...p, { question: "", payload: "" }]); setSelectedTemplateId("manual"); }}><Plus className="mr-1.5 h-3.5 w-3.5" />{isThai ? "เพิ่มคำถาม" : "Add question"}</Button>}
+                                </div>
 
                                 {(!selectedTemplateId || selectedTemplateId === "manual") && (
-                                    <div className="space-y-3 mt-3">
-                                        <div className="space-y-1.5">
-                                            <Label className="text-xs">{isThai ? "ข้อความต้อนรับ" : "Greeting"}</Label>
-                                            <Input placeholder={isThai ? "สวัสดีครับ 👋" : "Hello! 👋"} value={greeting} onChange={(e) => setGreeting(e.target.value)} />
+                                    <>
+                                        <Separator className="my-3 opacity-50" />
+                                        <div className="flex gap-2 items-end p-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                                            <div className="flex-1 space-y-1.5">
+                                                <Label className="text-[10px] uppercase tracking-wider text-blue-600 dark:text-blue-400 font-bold">
+                                                    {isThai ? "บันทึกเป็นเทมเพลตใหม่" : "Save as New Template"}
+                                                </Label>
+                                                <Input
+                                                    placeholder={isThai ? "ตั้งชื่อเทมเพลต..." : "Template name..."}
+                                                    value={newTemplateName}
+                                                    onChange={(e) => setNewTemplateName(e.target.value)}
+                                                    className="h-8 text-sm"
+                                                />
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                className="h-8"
+                                                onClick={handleSaveTemplate}
+                                                disabled={isSavingTemplate || !newTemplateName.trim()}
+                                            >
+                                                {isSavingTemplate ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
+                                                {isThai ? "บันทึก" : "Save"}
+                                            </Button>
                                         </div>
-                                        <div className="space-y-2">
-                                            {iceBreakers.map((ib, idx) => (
-                                                <div key={idx} className="flex gap-2 items-end">
-                                                    <div className="flex-1 space-y-1">
-                                                        <Label className="text-xs">{isThai ? `คำถาม ${idx + 1}` : `Question ${idx + 1}`}</Label>
-                                                        <Input placeholder={isThai ? "เช่น ดูสินค้าเพิ่มเติม" : "e.g. View products"} value={ib.question}
-                                                            onChange={(e) => { const u = [...iceBreakers]; u[idx] = { question: e.target.value, payload: e.target.value }; setIceBreakers(u); }} />
-                                                    </div>
-                                                    {iceBreakers.length > 1 && <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => setIceBreakers((p) => p.filter((_, i) => i !== idx))}><Trash2 className="h-4 w-4 text-destructive" /></Button>}
-                                                </div>
-                                            ))}
-                                            {iceBreakers.length < 5 && <Button variant="outline" size="sm" onClick={() => setIceBreakers((p) => [...p, { question: "", payload: "" }])}><Plus className="mr-1.5 h-3.5 w-3.5" />{isThai ? "เพิ่มคำถาม" : "Add question"}</Button>}
-                                        </div>
-                                    </div>
+                                    </>
                                 )}
                             </div>
-                        </>
-                    )}
+                        )}
+                    </div>
                 </CardContent>
             </Card>
 
             {/*  ── Launch ────────────────────────────────────────────────────────  */}
-            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm text-amber-700 dark:text-amber-400 flex gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>{isThai ? "แคมเปญจะสร้างในสถานะ PAUSED — ไปเปิดใช้งานใน Ads Manager หลังตรวจสอบ" : "Campaigns will be created as PAUSED — activate in Ads Manager after review"}</span>
-            </div>
-
-            <Button onClick={() => setShowReview(true)} disabled={loading || !adAccountId || !pageId || !hasMedia} size="lg" className="w-full">
+            <Button onClick={() => setShowReview(true)} disabled={loading || !adAccountId || !pageId || !hasMedia} size="lg" className="w-full mt-6">
                 <Rocket className="mr-2 h-4 w-4" />{isThai ? "รีวิวและสร้างแคมเปญ" : "Review & Launch"}
             </Button>
 
@@ -962,7 +1100,7 @@ export default function CreateAutoWizard() {
                     <DialogHeader className="p-6 pb-2 shrink-0">
                         <DialogTitle>{isThai ? "ตรวจสอบโพสต์ก่อนยืนยัน" : "Review Post Before Launch"}</DialogTitle>
                         <DialogDescription>
-                            {isThai ? "แคมเปญจะถูกสร้างในสถานะ PAUSED คุณสามารถตรวจสอบตัวอย่างโฆษณานี้ก่อนได้" : "Campaigns will be created as PAUSED. Please review your ad preview."}
+                            {isThai ? "แคมเปญจะถูกสร้างในสถานะ ACTIVE และพร้อมใช้งานกรุณาตรวจสอบรายละเอียดให้ถูกต้อง" : "Campaigns will be created as ACTIVE. Please review your ad preview setup."}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex-1 overflow-y-auto p-6 pt-2 grid grid-cols-1 md:grid-cols-[1fr_350px] gap-8">
@@ -1099,29 +1237,28 @@ export default function CreateAutoWizard() {
                                     <h4 className="font-semibold text-sm border-b pb-2 flex items-center gap-2 text-blue-600 dark:text-blue-400">
                                         <MessageCircle className="h-4 w-4" /> Messenger Setup
                                     </h4>
-                                    {selectedTemplateId && selectedTemplateId !== "manual" ? (
-                                        <p className="text-sm border rounded-lg p-3 bg-blue-50/50 dark:bg-blue-900/10">
-                                            Using template: <span className="font-semibold block mt-1 text-blue-700 dark:text-blue-400">{templates.find(t => t.id === selectedTemplateId)?.name || selectedTemplateId}</span>
+                                    {selectedTemplateId && selectedTemplateId !== "manual" && (
+                                        <p className="text-sm border rounded-lg p-3 bg-blue-50/50 dark:bg-blue-900/10 mb-3">
+                                            Using template: <span className="font-semibold block mt-1 text-blue-700 dark:text-blue-400">{localTemplates.find(t => t.id === selectedTemplateId)?.name || templates.find(t => t.id === selectedTemplateId)?.name || selectedTemplateId}</span>
                                         </p>
-                                    ) : (
-                                        <div className="border rounded-lg p-3 bg-blue-50/50 dark:bg-blue-900/10 text-sm">
-                                            <p className="font-medium mb-3 pb-3 border-b border-blue-200 dark:border-blue-800/50 leading-relaxed">
-                                                <span className="text-xs font-semibold text-blue-600/70 dark:text-blue-400/70 uppercase tracking-wider block mb-1">Greeting Message</span>
-                                                {greeting || "No greeting set"}
-                                            </p>
-                                            <p className="text-xs font-semibold text-blue-600/70 dark:text-blue-400/70 uppercase tracking-wider mb-2">Icebreaker Questions</p>
-                                            <ul className="list-none space-y-1.5">
-                                                {iceBreakers.filter(i => i.question).length > 0 ? iceBreakers.filter(i => i.question).map((ib, idx) => (
-                                                    <li key={idx} className="flex gap-2 items-center bg-white dark:bg-blue-950 px-2.5 py-2 rounded-md text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900 shadow-sm">
-                                                        <MessageCircle className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                                                        <span className="truncate">{ib.question}</span>
-                                                    </li>
-                                                )) : (
-                                                    <li className="text-muted-foreground italic text-xs">No questions set</li>
-                                                )}
-                                            </ul>
-                                        </div>
                                     )}
+                                    <div className="border rounded-lg p-3 bg-blue-50/50 dark:bg-blue-900/10 text-sm">
+                                        <p className="font-medium mb-3 pb-3 border-b border-blue-200 dark:border-blue-800/50 leading-relaxed">
+                                            <span className="text-xs font-semibold text-blue-600/70 dark:text-blue-400/70 uppercase tracking-wider block mb-1">Greeting Message</span>
+                                            {greeting || "No greeting set"}
+                                        </p>
+                                        <p className="text-xs font-semibold text-blue-600/70 dark:text-blue-400/70 uppercase tracking-wider mb-2">Icebreaker Questions</p>
+                                        <ul className="list-none space-y-1.5">
+                                            {iceBreakers.filter(i => i.question).length > 0 ? iceBreakers.filter(i => i.question).map((ib, idx) => (
+                                                <li key={idx} className="flex gap-2 items-center bg-white dark:bg-blue-950 px-2.5 py-2 rounded-md text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-900 shadow-sm">
+                                                    <MessageCircle className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                                                    <span className="truncate">{ib.question}</span>
+                                                </li>
+                                            )) : (
+                                                <li className="text-muted-foreground italic text-xs">No questions set</li>
+                                            )}
+                                        </ul>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1137,7 +1274,7 @@ export default function CreateAutoWizard() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     );
 }
 

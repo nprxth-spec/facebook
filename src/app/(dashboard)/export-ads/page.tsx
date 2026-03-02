@@ -112,10 +112,13 @@ function MultiSelectDropdown({ options, selected, onChange, placeholder, loading
                                 onClick={(e) => e.stopPropagation()} />
                         </div>
                     </div>
-                    <div className="flex gap-2 px-3 py-1.5 border-b border-gray-100 dark:border-gray-700 text-xs">
-                        <button onClick={() => onChange(filtered.map((o) => o.id))} className="text-primary hover:underline">เลือกทั้งหมด</button>
-                        <span className="text-gray-300">|</span>
-                        <button onClick={() => onChange([])} className="text-gray-500 hover:underline">ยกเลิก</button>
+                    <div className="flex justify-between items-center px-3 py-1.5 border-b border-gray-100 dark:border-gray-700 text-xs">
+                        <div className="flex gap-2">
+                            <button onClick={() => onChange(filtered.map((o) => o.id))} className="text-primary hover:underline">เลือกทั้งหมด</button>
+                            <span className="text-gray-300">|</span>
+                            <button onClick={() => onChange([])} className="text-gray-500 hover:underline">ยกเลิก</button>
+                        </div>
+                        <button onClick={() => setOpen(false)} className="text-blue-600 hover:text-blue-700 font-medium px-2.5 py-1 rounded-md bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 transition-colors">ตกลง</button>
                     </div>
                     <div className="max-h-52 overflow-y-auto p-1">
                         {filtered.map((opt) => (
@@ -385,11 +388,24 @@ export default function ExportAdsPage() {
 
             {/* Step 1: Ad Accounts */}
             <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl p-5 space-y-3">
-                <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">1</span>
-                    <h2 className="font-semibold text-gray-900 dark:text-gray-100">
-                        {isThai ? "เลือกบัญชีโฆษณา" : "Select Ad Accounts"}
-                    </h2>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-primary text-white text-xs flex items-center justify-center font-bold">1</span>
+                        <h2 className="font-semibold text-gray-900 dark:text-gray-100">
+                            {isThai ? "เลือกบัญชีโฆษณา" : "Select Ad Accounts"}
+                        </h2>
+                    </div>
+                    <Button
+                        onClick={handleExport}
+                        disabled={isExporting || !selectedAccounts.length || !sheetId || !sheetTab}
+                        className="h-9 px-4 gap-2 text-sm font-semibold"
+                    >
+                        {isExporting ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> {isThai ? "กำลังส่งออก..." : "Exporting..."}</>
+                        ) : (
+                            <><Upload className="w-4 h-4" /> {isThai ? "ส่งออกไปยัง Google Sheets" : "Export to Google Sheets"}</>
+                        )}
+                    </Button>
                 </div>
                 <MultiSelectDropdown
                     options={adAccounts}
@@ -419,22 +435,24 @@ export default function ExportAdsPage() {
                         {isThai ? "เลือกไฟล์ Google Sheets" : "Select Google Sheet"}
                     </h2>
                 </div>
-                <SheetDropdown
-                    sheets={sheets}
-                    value={sheetId}
-                    onChange={(id, name) => { setSheetId(id); setSheetName(name); setSheetTab(""); }}
-                    placeholder={isThai ? "ค้นหาและเลือกไฟล์..." : "Search and select file..."}
-                    loading={sheetsLoading}
-                    error={sheetsError}
-                />
-                <TabDropdown
-                    tabs={tabs}
-                    value={sheetTab}
-                    onChange={setSheetTab}
-                    placeholder={isThai ? "เลือกแท็บชีต..." : "Select sheet tab..."}
-                    disabled={!sheetId}
-                    loading={tabsLoading}
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <SheetDropdown
+                        sheets={sheets}
+                        value={sheetId}
+                        onChange={(id, name) => { setSheetId(id); setSheetName(name); setSheetTab(""); }}
+                        placeholder={isThai ? "ค้นหาและเลือกไฟล์..." : "Search and select file..."}
+                        loading={sheetsLoading}
+                        error={sheetsError}
+                    />
+                    <TabDropdown
+                        tabs={tabs}
+                        value={sheetTab}
+                        onChange={setSheetTab}
+                        placeholder={isThai ? "เลือกแท็บชีต..." : "Select sheet tab..."}
+                        disabled={!sheetId}
+                        loading={tabsLoading}
+                    />
+                </div>
             </div>
 
             {/* Step 3: Column Mapping */}
@@ -501,20 +519,6 @@ export default function ExportAdsPage() {
                 </div>
             </div>
 
-            {/* Export Button */}
-            <div className="flex justify-end">
-                <Button
-                    onClick={handleExport}
-                    disabled={isExporting || !selectedAccounts.length || !sheetId || !sheetTab}
-                    className="h-11 px-8 gap-2 text-sm font-semibold"
-                >
-                    {isExporting ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> {isThai ? "กำลังส่งออก..." : "Exporting..."}</>
-                    ) : (
-                        <><Upload className="w-4 h-4" /> {isThai ? "ส่งออกไปยัง Google Sheets" : "Export to Google Sheets"}</>
-                    )}
-                </Button>
-            </div>
         </div>
     );
 }
