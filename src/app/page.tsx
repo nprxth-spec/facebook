@@ -19,56 +19,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/components/providers/ThemeProvider";
 
-const features = [
-  {
-    icon: FileSpreadsheet,
-    titleTh: "ส่งออกไป Google Sheets",
-    titleEn: "Export to Google Sheets",
-    descriptionTh: "ส่งข้อมูลโฆษณา Facebook ไปยัง Google Sheets ได้ทันที รองรับหลายบัญชีพร้อมกัน",
-    descriptionEn: "Send your Facebook Ads data to Google Sheets instantly, supporting multiple accounts.",
-    color: "bg-green-50 text-green-600",
-  },
-  {
-    icon: RefreshCw,
-    titleTh: "อัปเดตอัตโนมัติ",
-    titleEn: "Automatic updates",
-    descriptionTh: "ตั้งค่าการส่งออกอัตโนมัติทุกวัน ไม่ต้องทำซ้ำด้วยตัวเอง",
-    descriptionEn: "Schedule automatic daily exports so you never have to repeat the same work.",
-    color: "bg-blue-50 text-blue-600",
-  },
-  {
-    icon: BarChart3,
-    titleTh: "แผงควบคุม",
-    titleEn: "Dashboard",
-    descriptionTh: "ดูสถิติและสถานะการส่งออกทั้งหมดได้ในหน้าเดียว",
-    descriptionEn: "See all export stats and statuses in a single dashboard.",
-    color: "bg-purple-50 text-purple-600",
-  },
-  {
-    icon: Shield,
-    titleTh: "ปลอดภัย",
-    titleEn: "Secure",
-    descriptionTh: "เข้าสู่ระบบด้วย Google หรือ Facebook OAuth ที่ปลอดภัย",
-    descriptionEn: "Sign in securely with Google or Facebook OAuth.",
-    color: "bg-yellow-50 text-yellow-600",
-  },
-  {
-    icon: Clock,
-    titleTh: "ประวัติการส่งออก",
-    titleEn: "Export history",
-    descriptionTh: "ตรวจสอบประวัติการส่งออกทุกครั้ง พร้อมรายละเอียดครบถ้วน",
-    descriptionEn: "Review every export with full details in the history.",
-    color: "bg-red-50 text-red-600",
-  },
-  {
-    icon: Zap,
-    titleTh: "แมพคอลัมน์อิสระ",
-    titleEn: "Flexible column mapping",
-    descriptionTh: "กำหนดเองได้ว่าข้อมูลไหนจะไปอยู่คอลัมน์ไหนใน Sheet",
-    descriptionEn: "Define exactly which data goes to which column in your sheet.",
-    color: "bg-indigo-50 text-indigo-600",
-  },
-];
+
 
 const benefitsTh = [
   "รองรับหลายบัญชีโฆษณาพร้อมกัน",
@@ -322,40 +273,220 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-      {/* Features */}
-      <section id="features" className="py-20 lg:py-28 px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-white/5">
-        <div className="max-w-6xl mx-auto space-y-16">
-          <div className="text-center space-y-4 max-w-2xl mx-auto">
-            <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
-              {isThai ? "จัดการโฆษณาง่ายขึ้นด้วย Centxo" : "Everything you need to manage your ads"}
-            </h2>
-            <p className="text-slate-600 dark:text-slate-400">
-              {isThai
-                ? "เครื่องมือครบครันที่จะช่วยให้คุณลดเวลาทำงานซ้ำซ้อน และโฟกัสกับผลลัพธ์ได้มากขึ้น"
-                : "A complete toolkit to automate the boring stuff and let you focus on what really matters—results."}
-            </p>
+      <section id="features" className="py-24 lg:py-32 px-4 sm:px-6 lg:px-8 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-white/5">
+        <div className="max-w-7xl mx-auto space-y-32">
+
+          {/* Feature 1: Export to Sheets */}
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+            <div className="space-y-6">
+              <span className="text-blue-600 font-bold tracking-wider text-sm uppercase block">INTEGRATION</span>
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+                {isThai ? "ส่งข้อมูลเข้า Sheets แบบเรียลไทม์" : "Real-time sync to Google Sheets"}
+              </h2>
+              <p className="text-lg text-slate-600 dark:text-slate-400 max-w-xl leading-relaxed">
+                {isThai
+                  ? "เบื่อกับการต้องคอยดาวน์โหลดและรวมไฟล์ CSV หรือเปล่า? ระบบของเราดึงข้อมูล Campaign, Adsets และ Ads ทั้งหมดส่งตรงเข้า Google Sheets ทันที"
+                  : "Tired of downloading and merging CSV files? Our system pulls all your Campaigns, Adsets, and Ads directly into Google Sheets instantly."}
+              </p>
+
+              <div className="space-y-4 pt-4">
+                <div className="flex gap-4 items-start">
+                  <div className="rounded-full p-2 bg-blue-50 text-blue-600 shrink-0">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-900 dark:text-slate-100">{isThai ? "แมพคอลัมน์อิสระ" : "Flexible Column Mapping"}</h4>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{isThai ? "กำหนดเองได้ว่าข้อมูลไหนจะไปอยู่คอลัมน์ไหน" : "Define exactly which metrics go to which columns."}</p>
+                  </div>
+                </div>
+                <div className="flex gap-4 items-start">
+                  <div className="rounded-full p-2 bg-emerald-50 text-emerald-600 shrink-0">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-900 dark:text-slate-100">{isThai ? "รองรับหลายบัญชี" : "Multi-account Support"}</h4>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{isThai ? "ดึงข้อมูลจากหลายบัญชีโฆษณาพร้อมกันได้ในคลิกเดียว" : "Pull data from multiple ad accounts simultaneously."}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Mockup 1 */}
+            <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
+              <div className="absolute -inset-4 bg-gradient-to-tr from-blue-100 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-500/10 rounded-[2.5rem] blur-2xl opacity-50" />
+              <div className="relative bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl p-4 sm:p-6 overflow-hidden">
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="flex gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-slate-200 dark:bg-slate-700" />
+                    <span className="w-3 h-3 rounded-full bg-slate-200 dark:bg-slate-700" />
+                    <span className="w-3 h-3 rounded-full bg-slate-200 dark:bg-slate-700" />
+                  </div>
+                  <div className="mx-auto flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-lg px-4 py-1.5">
+                    <span className="text-[11px] text-slate-500 font-medium">docs.google.com/spreadsheets</span>
+                  </div>
+                </div>
+                {/* Mock Sheet rows */}
+                <div className="border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-800/50 flex flex-col">
+                  <div className="flex border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 px-3 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                    <div className="w-1/3">Campaign</div>
+                    <div className="w-1/4">Spend</div>
+                    <div className="w-1/6">CTR</div>
+                    <div className="w-1/4">Purchase</div>
+                  </div>
+                  {[
+                    { camp: "Q3_Sale_Retargeting", spend: "$450.00", ctr: "2.4%", pur: "12" },
+                    { camp: "LeadGen_Broad_v2", spend: "$1,200.50", ctr: "1.8%", pur: "45" },
+                    { camp: "Brand_Awareness_Top", spend: "$80.00", ctr: "0.9%", pur: "2" },
+                    { camp: "Lookalike_1%_Purchasers", spend: "$650.25", ctr: "3.1%", pur: "28" },
+                  ].map((row, i) => (
+                    <div key={i} className="flex border-b border-slate-100 dark:border-slate-700/50 px-3 py-3 text-[11px] text-slate-600 dark:text-slate-300">
+                      <div className="w-1/3 font-medium text-slate-800 dark:text-slate-200 truncate pr-2">{row.camp}</div>
+                      <div className="w-1/4">{row.spend}</div>
+                      <div className="w-1/6 text-emerald-500">{row.ctr}</div>
+                      <div className="w-1/4">{row.pur}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Sync popover mockup */}
+                <div className="absolute bottom-8 right-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl rounded-2xl p-4 flex items-center gap-4 animate-in slide-in-from-bottom-5 fade-in duration-700">
+                  <div className="rounded-full bg-green-100 p-2 text-green-600 dark:bg-green-500/20 dark:text-green-400">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-900 dark:text-slate-100">Sync Complete</h5>
+                    <p className="text-[10px] text-slate-500">24 campaigns updated</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-            {features.map((feature, idx) => (
-              <div
-                key={idx}
-                className="group relative rounded-3xl p-6 sm:p-8 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-white/10 shadow-sm hover:shadow-md transition-all duration-200"
-              >
-                <div
-                  className={`inline-flex items-center justify-center rounded-xl p-3 mb-5 transition-colors ${feature.color}`}
-                >
-                  <feature.icon className="w-5 h-5 sm:w-6 h-6" />
+          {/* Feature 2: Automation */}
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+            {/* Mockup 2 (Left on Desktop) */}
+            <div className="relative mx-auto w-full max-w-lg lg:max-w-none order-2 lg:order-1">
+              <div className="absolute -inset-4 bg-gradient-to-tr from-cyan-100 to-emerald-50 dark:from-cyan-900/20 dark:to-emerald-500/10 rounded-[2.5rem] blur-2xl opacity-50" />
+              <div className="relative bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl p-6 sm:p-8 overflow-hidden h-full min-h-[300px] flex flex-col justify-center">
+                <div className="space-y-6">
+                  {/* Cron setup mockup */}
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-cyan-50 dark:bg-cyan-900/30 flex items-center justify-center text-cyan-500">
+                        <Clock className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Daily Sync</div>
+                        <div className="text-xs text-slate-500">Every morning at 08:00 AM</div>
+                      </div>
+                    </div>
+                    <div className="w-10 h-5 rounded-full bg-cyan-500 relative transition-colors duration-200">
+                      <div className="absolute right-1 top-1 w-3 h-3 rounded-full bg-white shadow-sm" />
+                    </div>
+                  </div>
+
+                  {/* Job List */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Run ID: #4829</span>
+                      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-400 text-[10px] px-2 py-0">Success</Badge>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Run ID: #4828</span>
+                      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-400 text-[10px] px-2 py-0">Success</Badge>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 opacity-60">
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-300">Run ID: #4827</span>
+                      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/20 dark:text-emerald-400 text-[10px] px-2 py-0">Success</Badge>
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-2">
-                  {isThai ? feature.titleTh : feature.titleEn}
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                  {isThai ? feature.descriptionTh : feature.descriptionEn}
-                </p>
               </div>
-            ))}
+            </div>
+
+            <div className="space-y-6 order-1 lg:order-2">
+              <span className="text-cyan-600 dark:text-cyan-400 font-bold tracking-wider text-sm uppercase block">AUTOMATION</span>
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+                {isThai ? "จัดการให้ทุกวัน ไม่ต้องตื่นมาทำเอง" : "Set it and forget it"}
+              </h2>
+              <p className="text-lg text-slate-600 dark:text-slate-400 max-w-xl leading-relaxed">
+                {isThai
+                  ? "ตั้งเวลาการดึงข้อมูลรายวันไว้ล่วงหน้า ระบบจะทำงานให้คุณตอนเช้าตรู่ พอคุณเปิดคอมทำงาน ข้อมูลพร้อมวิเคราะห์ใน Sheet เรียบร้อยแล้ว"
+                  : "Schedule daily syncs in advance. By the time you start your workday, all your ad performance data is already waiting for you in your spreadsheet."}
+              </p>
+
+              <div className="space-y-4 pt-4">
+                <div className="flex gap-4 items-start">
+                  <div className="rounded-full p-2 bg-cyan-50 text-cyan-600 shrink-0">
+                    <RefreshCw className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-900 dark:text-slate-100">{isThai ? "อัปเดตอัตโนมัติ" : "Automatic Updates"}</h4>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{isThai ? "ตั้งค่าได้ว่าให้ระบบทำงานดึงล่าสุดไปอัปเดตเองทุกวัน" : "Configure the system to automatically update your sheets daily."}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+
+          {/* Feature 3: Dashboard */}
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+            <div className="space-y-6">
+              <span className="text-purple-600 font-bold tracking-wider text-sm uppercase block">PERFORMANCE</span>
+              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+                {isThai ? "แผงควบคุมและประวัติ" : "Centralized Dashboard"}
+              </h2>
+              <p className="text-lg text-slate-600 dark:text-slate-400 max-w-xl leading-relaxed">
+                {isThai
+                  ? "บริหารบัญชีโฆษณาต่างๆ ของคุณได้ในที่เดียว ดูประวัติการ Export ตรวจเช็กข้อผิดพลาด และสรุปยอดที่ใช้งบไปแล้วได้อย่างโปร่งใส"
+                  : "Manage all your ad accounts from one powerful dashboard. Review export history, check for errors, and summarize ad spend transparently."}
+              </p>
+
+              <div className="space-y-4 pt-4">
+                <div className="flex gap-4 items-start">
+                  <div className="rounded-full p-2 bg-purple-50 text-purple-600 shrink-0">
+                    <BarChart3 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-900 dark:text-slate-100">{isThai ? "จัดการง่าย" : "Easy Management"}</h4>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{isThai ? "มองเห็นบัญชีและสถานะการ Exports ภาพรวม" : "See accounts and overall export statuses at a glance."}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Mockup 3 */}
+            <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
+              <div className="absolute -inset-4 bg-gradient-to-tr from-purple-100 to-pink-50 dark:from-purple-900/20 dark:to-pink-500/10 rounded-[2.5rem] blur-2xl opacity-50" />
+              <div className="relative bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl p-6 sm:p-8 overflow-hidden h-full">
+                {/* Dashboard Stats */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 p-4">
+                    <div className="text-xs font-medium text-slate-500 mb-1">Total Spend Sync</div>
+                    <div className="text-2xl font-bold text-slate-900 dark:text-white">$14,230</div>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 p-4">
+                    <div className="text-xs font-medium text-slate-500 mb-1">Rows Exported</div>
+                    <div className="text-2xl font-bold text-slate-900 dark:text-white">12,492</div>
+                  </div>
+                </div>
+                {/* Fake Chart bars */}
+                <div className="flex items-end gap-2 h-32 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  {[40, 70, 45, 90, 65, 80, 55].map((height, i) => (
+                    <div key={i} className="flex-1 rounded-t-sm bg-purple-100 dark:bg-purple-900/40 relative group">
+                      <div
+                        className="absolute bottom-0 w-full rounded-t-sm bg-purple-500 dark:bg-purple-400 transition-all"
+                        style={{ height: `${height}%` }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between mt-3 text-[10px] font-medium text-slate-400">
+                  <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </section>
       {/* Footer */}
