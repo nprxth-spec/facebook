@@ -148,7 +148,7 @@ export default function LandingPage() {
                   <Button
                     variant="outline"
                     size="lg"
-                    className="px-6 border-white/20 bg-transparent text-slate-100 hover:bg-white/5"
+                    className="px-6 border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/20 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/5"
                   >
                     {isThai ? "ดูฟีเจอร์" : "View features"}
                   </Button>

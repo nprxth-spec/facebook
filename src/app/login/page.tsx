@@ -27,7 +27,7 @@ export default function LoginPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-2">
             <img src="/centxo-logo.png" alt="Centxo Logo" className="w-8 h-8 object-contain" />
-            <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+            <span className="text-base font-semibold text-slate-800 dark:text-slate-100">
               Centxo
             </span>
           </Link>
@@ -35,14 +35,14 @@ export default function LoginPage() {
       </header>
 
       {/* Center card */}
-      <div className="w-full max-w-sm">
-        <div className="relative mx-auto rounded-3xl bg-white/95 dark:bg-slate-900 shadow-[0_18px_60px_rgba(15,23,42,0.16)] border border-slate-100/90 dark:border-slate-800 px-7 py-8">
+      <div className="w-full max-w-md">
+        <div className="relative mx-auto rounded-3xl bg-white/95 dark:bg-slate-900 shadow-[0_18px_60px_rgba(15,23,42,0.16)] border border-slate-100/90 dark:border-slate-800 px-8 py-10">
           {/* Heading */}
-          <div className="text-center mb-5">
-            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-50">
               {isThai ? "ยินดีต้อนรับสู่ Centxo" : "Welcome to Centxo"}
             </h1>
-            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
               {isThai
                 ? "ปลดล็อกทุกฟีเจอร์ด้วยการเข้าสู่ระบบ"
                 : "Unlock all features by logging in"}
@@ -55,7 +55,7 @@ export default function LoginPage() {
               onClick={() => signIn("google", { callbackUrl: "/connect" })}
               variant="outline"
               size="lg"
-              className="w-full max-w-[300px] h-10 justify-center gap-1.5 rounded-xl border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-[13px] px-3"
+              className="w-full max-w-[340px] h-11 justify-center gap-1.5 rounded-xl border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800 text-base px-3"
             >
               <GoogleIcon />
               {isThai ? "เข้าสู่ระบบด้วย Google" : "Continue with Google"}
@@ -64,7 +64,7 @@ export default function LoginPage() {
             {/* Divider */}
             <div className="flex items-center gap-3 py-1">
               <span className="h-px flex-1 bg-slate-200" />
-              <span className="text-[11px] text-slate-400 uppercase tracking-[0.18em]">
+              <span className="text-xs text-slate-400 uppercase tracking-[0.18em]">
                 {isThai ? "หรือ" : "or"}
               </span>
               <span className="h-px flex-1 bg-slate-200" />
@@ -75,10 +75,44 @@ export default function LoginPage() {
               type="button"
               variant="outline"
               size="lg"
-              className="w-full max-w-[300px] h-10 justify-center gap-1.5 rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-[13px] px-3"
+              className="w-full max-w-[340px] h-11 justify-center gap-1.5 rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-base px-3"
             >
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-300 text-[11px]">
-                @
+              <span className="inline-flex h-5 w-5 items-center justify-center">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-4 h-4 text-slate-500"
+                  aria-hidden="true"
+                >
+                  <rect
+                    x="3"
+                    y="5"
+                    width="18"
+                    height="14"
+                    rx="2"
+                    ry="2"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  />
+                  <path
+                    d="M4 7.5L12 12L20 7.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <text
+                    x="12"
+                    y="14"
+                    textAnchor="middle"
+                    fontSize="8"
+                    fill="currentColor"
+                    fontFamily="sans-serif"
+                  >
+                    @
+                  </text>
+                </svg>
               </span>
               {isThai ? "เข้าสู่ระบบด้วยอีเมล" : "Continue with Email"}
             </Button>
@@ -86,7 +120,7 @@ export default function LoginPage() {
 
           {/* Terms */}
           <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 leading-relaxed">
+            <p className="text-sm text-center text-slate-400 dark:text-slate-500 leading-relaxed">
               {isThai ? (
                 <>
                   การกดปุ่มเข้าสู่ระบบ ถือว่าคุณยอมรับ{" "}
@@ -127,7 +161,7 @@ export default function LoginPage() {
         </div>
 
         {/* Back link */}
-        <p className="text-center text-xs text-slate-400 mt-6">
+        <p className="text-center text-base text-slate-400 mt-6">
           <Link href="/" className="hover:text-slate-700 dark:hover:text-slate-200">
             {isThai ? "← กลับหน้าหลัก" : "← Back to homepage"}
           </Link>
