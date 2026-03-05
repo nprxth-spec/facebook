@@ -43,7 +43,8 @@ export async function logActivity({
         path,
         ip,
         userAgent,
-        metadata: metadata ?? null,
+        // ให้ Prisma จัดการ serialize JSON เอง และหลีกเลี่ยงการใส่ null ตรง ๆ
+        ...(metadata ? { metadata: metadata as any } : {}),
       },
     });
   } catch (e) {
