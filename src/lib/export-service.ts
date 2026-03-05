@@ -62,6 +62,9 @@ export interface ExportServiceOptions {
     configName?: string;
     exportType?: "manual" | "auto";
     timezone?: string;
+    ip?: string | null;
+    userAgent?: string | null;
+    sourcePath?: string | null;
 }
 
 const MAX_EXPORT_DAYS_SINGLE_REQUEST =
@@ -247,7 +250,8 @@ export async function runExportTask(options: ExportServiceOptions) {
     const {
         userId, fbToken, oauth2Client, adAccountIds, googleSheetId,
         sheetTab, columnMapping, writeMode, dataDate, dateRange = "today",
-        configId, configName, exportType = "manual", timezone = "Asia/Bangkok"
+        configId, configName, exportType = "manual", timezone = "Asia/Bangkok",
+        ip, userAgent, sourcePath,
     } = options;
 
     let since: string;
@@ -582,7 +586,14 @@ export async function runExportTask(options: ExportServiceOptions) {
             dataDate: logDate,
             status: logStatus,
             error: logError,
-            details: exportDetails,
+            details: {
+                meta: {
+                    ip: ip ?? null,
+                    userAgent: userAgent ?? null,
+                    sourcePath: sourcePath ?? null,
+                },
+                export: exportDetails,
+            },
         },
     });
 

@@ -4,6 +4,7 @@ import Facebook from "next-auth/providers/facebook";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db";
 import { exchangeFacebookToken } from "@/lib/tokens";
+import { logActivity } from "@/lib/activity-log";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -68,27 +69,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
     },
-    async signIn({ account }) {
-      if (account?.provider === "facebook" && account.access_token) {
-        try {
-          const longLived = await exchangeFacebookToken(account.access_token);
-          await prisma.account.update({
-            where: {
-              provider_providerAccountId: {
-                provider: account.provider,
-                providerAccountId: account.providerAccountId,
-              },
-            },
-            data: {
-              access_token: longLived.access_token,
-              expires_at: Math.floor(Date.now() / 1000) + longLived.expires_in,
-            },
-          });
-          console.log("Facebook token exchanged (signIn)");
-        } catch (err) {
-          console.error("Facebook token exchange error (signIn):", err);
-        }
-      }
+    async signIn({ user, account, isNewUser }) {
+      // Log successful login (ไม่มี access ถึง IP/UA ใน events)
+      await logActivity({
+        userId: user.id,
+        action: "login",
+        category: "auth",
+        metadata: {
+          provider: account?.provider,
+          isNewUser: !!isNewUser,
+        },
+      });
     },
   },
   callbacks: {

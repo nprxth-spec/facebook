@@ -29,6 +29,7 @@ model User {
   interestPresets   InterestAudiencePreset[]
   messengerTemplates MessengerTemplate[]
   aiUsages         AiUsage[]
+  activityLogs     UserActivityLog[]
 }
 
 model Account {
@@ -138,6 +139,24 @@ model ExportLog {
 
   @@index([userId, createdAt])
   @@index([userId, status])
+}
+
+/// บันทึกกิจกรรมสำคัญของผู้ใช้ เช่น login, export, billing
+model UserActivityLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String   // เช่น login, export_run, billing_subscribe
+  category  String   // เช่น auth, export, billing, admin, system
+  method    String?  // HTTP method หรือ OAuth เป็นต้น
+  path      String?  // URL path หรือ endpoint
+  ip        String?
+  userAgent String?
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([category, createdAt])
 }
 
 model UserPreferences {

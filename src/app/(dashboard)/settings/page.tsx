@@ -106,13 +106,16 @@ function SettingsContent() {
   const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const VALID_TABS = ["account", "connections", "manager-accounts", "facebook-pages", "billing", "preferences", "delete"];
+  const VALID_TABS = ["account", "connections", "manager-accounts", "facebook-pages", "billing", "preferences", "sessions", "delete"];
   const activeTab = VALID_TABS.includes(searchParams.get("tab") ?? "") ? (searchParams.get("tab") as string) : "account";
   const setActiveTab = useCallback((tab: string) => {
     router.push(`/settings?tab=${tab}`, { scroll: false });
   }, [router]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionInfoLoading, setSessionInfoLoading] = useState(false);
+  const [sessionInfo, setSessionInfo] = useState<{ ip: string; userAgent: string } | null>(null);
 
   // Handle success/error from custom Facebook link OAuth callback
   useEffect(() => {
@@ -187,6 +190,46 @@ function SettingsContent() {
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
   const isThai = language === "th";
+
+  useEffect(() => {
+    if (activeTab !== "sessions") return;
+    setSessionInfoLoading(true);
+    fetch("/api/user/sessions")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && !data.error) {
+          setSessionInfo({ ip: data.ip, userAgent: data.userAgent });
+        }
+      })
+      .finally(() => setSessionInfoLoading(false));
+  }, [activeTab]);
+
+  const handleSignOutAllSessions = async () => {
+    setSessionsLoading(true);
+    try {
+      const res = await fetch("/api/user/sessions", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        throw new Error("Failed");
+      }
+      toast.success(
+        isThai
+          ? "ออกจากระบบจากทุกอุปกรณ์แล้ว"
+          : "Signed out from all devices.",
+      );
+      await signOut({ callbackUrl: "/login" });
+    } catch {
+      toast.error(
+        isThai
+          ? "ออกจากระบบจากทุกอุปกรณ์ไม่สำเร็จ"
+          : "Could not sign out from all devices.",
+      );
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
 
   const billingPlans = [
     {
@@ -848,6 +891,7 @@ function SettingsContent() {
     { id: "facebook-pages", label: isThai ? "เพจเฟซบุ๊ก" : "Facebook Pages", icon: Globe },
     { id: "billing", label: isThai ? "การชำระเงิน" : "Billing", icon: CreditCard },
     { id: "preferences", label: isThai ? "การแสดงผล" : "Display", icon: Palette },
+    { id: "sessions", label: isThai ? "เซสชัน" : "Sessions", icon: Clock },
   ];
 
   const themeOptions = [
@@ -994,6 +1038,99 @@ function SettingsContent() {
                   >
                     {isThai ? "บันทึก" : "Save"}
                   </Button>
+                </section>
+              )}
+
+              {/* Sessions */}
+              {activeTab === "sessions" && (
+                <section className="space-y-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {isThai ? "จัดการเซสชัน" : "Session management"}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {isThai
+                        ? "ออกจากระบบจากอุปกรณ์อื่นทั้งหมด หากสงสัยว่าบัญชีอาจถูกใช้งานโดยไม่ได้รับอนุญาต"
+                        : "Sign out from all other devices if you suspect unauthorized access."}
+                    </p>
+                  </div>
+
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm">
+                        {isThai ? "เซสชันปัจจุบัน" : "Current session"}
+                      </CardTitle>
+                      <CardDescription className="text-xs">
+                        {isThai
+                          ? "ข้อมูลนี้อ้างอิงจาก IP และเบราว์เซอร์ที่คุณใช้งานอยู่ตอนนี้"
+                          : "Based on the IP and browser of your current request."}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      {sessionInfoLoading ? (
+                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          {isThai ? "กำลังโหลดรายละเอียดเซสชัน..." : "Loading session details..."}
+                        </div>
+                      ) : sessionInfo ? (
+                        <div className="space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                          <p>
+                            <span className="font-medium">
+                              {isThai ? "ที่อยู่ IP:" : "IP address:"}
+                            </span>{" "}
+                            <span className="font-mono">{sessionInfo.ip}</span>
+                          </p>
+                          <p className="break-all">
+                            <span className="font-medium">
+                              {isThai ? "เบราว์เซอร์ / อุปกรณ์:" : "Browser / device:"}
+                            </span>{" "}
+                            <span>{sessionInfo.userAgent}</span>
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {isThai
+                            ? "ไม่พบข้อมูลเซสชันปัจจุบัน"
+                            : "No current session information available."}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border border-amber-200/70 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-950/30">
+                    <CardContent className="py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">
+                          <Shield className="w-5 h-5 text-amber-500 dark:text-amber-400" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {isThai
+                              ? "ออกจากระบบจากทุกอุปกรณ์"
+                              : "Sign out from all devices"}
+                          </p>
+                          <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                            {isThai
+                              ? "คำสั่งนี้จะลบเซสชันทั้งหมดของคุณออกจากเซิร์ฟเวอร์ จากนั้นระบบจะพาคุณไปหน้าเข้าสู่ระบบใหม่"
+                              : "This will remove all of your active sessions on the server and then return you to the login page."}
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="destructive"
+                        className="gap-2"
+                        onClick={handleSignOutAllSessions}
+                        disabled={sessionsLoading}
+                      >
+                        {sessionsLoading && (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        )}
+                        {isThai
+                          ? "ออกจากระบบจากทุกอุปกรณ์"
+                          : "Sign out everywhere"}
+                      </Button>
+                    </CardContent>
+                  </Card>
                 </section>
               )}
 

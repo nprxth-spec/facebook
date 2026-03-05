@@ -154,6 +154,9 @@ export async function GET(req: Request) {
                             configName: config.name,
                             exportType: "auto",
                             timezone: userTimezone,
+                            ip: "server",
+                            userAgent: "cron-auto-export",
+                            sourcePath: "/api/cron/auto-export",
                         });
 
                         processedCount++;

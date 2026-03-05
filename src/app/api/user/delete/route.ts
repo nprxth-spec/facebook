@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 import { NextRequest, NextResponse } from "next/server";
 import { assertSameOrigin } from "@/lib/security";
+import { logActivity } from "@/lib/activity-log";
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -59,6 +60,14 @@ export async function DELETE(req: NextRequest) {
   }
 
   await prisma.user.delete({ where: { id: userId } });
+
+  await logActivity({
+    req,
+    userId,
+    action: "account_deleted",
+    category: "auth",
+    metadata: { email },
+  });
 
   return NextResponse.json({ success: true });
 }

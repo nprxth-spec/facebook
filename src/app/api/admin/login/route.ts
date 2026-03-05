@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logActivity } from "@/lib/activity-log";
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -26,6 +27,12 @@ export async function POST(req: Request) {
 
   const isValid = username === ADMIN_USERNAME && password === ADMIN_PASSWORD;
   if (!isValid) {
+    await logActivity({
+      req,
+      action: "admin_login_failed",
+      category: "admin",
+      metadata: { username },
+    });
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 
@@ -36,6 +43,13 @@ export async function POST(req: Request) {
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 60 * 60 * 8, // 8 hours
+  });
+
+  await logActivity({
+    req,
+    action: "admin_login",
+    category: "admin",
+    metadata: { username },
   });
 
   return res;

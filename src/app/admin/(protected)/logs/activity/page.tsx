@@ -63,7 +63,7 @@ function getDateRange(filter: DateFilter, from?: string, to?: string) {
   }
 }
 
-export default async function AdminLogsPage({
+export default async function AdminActivityLogsPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -77,8 +77,9 @@ export default async function AdminLogsPage({
     : 25;
 
   const dateFilter = (sp.date as DateFilter | undefined) ?? "all";
-  const typeFilter = (sp.type as string | undefined) ?? "all";
-  const statusFilter = (sp.status as string | undefined) ?? "all";
+  const categoryFilter = (sp.category as string | undefined) ?? "all";
+  const emailFilter = (sp.email as string | undefined) ?? "";
+  const actionFilter = (sp.action as string | undefined) ?? "";
   const from = typeof sp.from === "string" ? sp.from : undefined;
   const to = typeof sp.to === "string" ? sp.to : undefined;
 
@@ -91,19 +92,20 @@ export default async function AdminLogsPage({
       ...(range.lte ? { lte: range.lte } : {}),
     };
   }
-  if (typeFilter === "manual") {
-    where.exportType = "manual";
-  } else if (typeFilter === "auto") {
-    where.exportType = "auto";
+  if (categoryFilter !== "all") {
+    where.category = categoryFilter;
   }
-  if (statusFilter === "success") {
-    where.status = "success";
-  } else if (statusFilter === "error") {
-    where.status = "error";
+  if (actionFilter.trim()) {
+    where.action = { contains: actionFilter.trim(), mode: "insensitive" };
+  }
+  if (emailFilter.trim()) {
+    where.user = {
+      email: { contains: emailFilter.trim(), mode: "insensitive" },
+    };
   }
 
   const [logs, total] = await Promise.all([
-    prisma.exportLog.findMany({
+    prisma.userActivityLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * pageSize,
@@ -111,15 +113,17 @@ export default async function AdminLogsPage({
       select: {
         id: true,
         user: { select: { id: true, email: true } },
-        exportType: true,
-        configName: true,
-        status: true,
-        error: true,
+        action: true,
+        category: true,
+        method: true,
+        path: true,
+        ip: true,
+        userAgent: true,
+        metadata: true,
         createdAt: true,
-        details: true,
       },
     }),
-    prisma.exportLog.count({ where }),
+    prisma.userActivityLog.count({ where }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -128,17 +132,28 @@ export default async function AdminLogsPage({
     <div className="mx-auto max-w-6xl px-8 py-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Export Logs</h1>
+          <h1 className="text-xl font-semibold text-slate-900">
+            Activity Logs
+          </h1>
           <p className="text-sm text-slate-500">
-            ดูประวัติการส่งออกข้อมูลของผู้ใช้ และสถานะล่าสุด
+            ดูประวัติการล็อกอิน การจัดการเซสชัน และกิจกรรมสำคัญของผู้ใช้
           </p>
         </div>
-        <Link
-          href="/admin"
-          className="text-xs text-slate-500 hover:text-slate-700 cursor-pointer"
-        >
-          ← กลับไปแดชบอร์ด
-        </Link>
+        <div className="flex items-center gap-3 text-xs text-slate-500">
+          <Link
+            href="/admin"
+            className="hover:text-slate-700 cursor-pointer"
+          >
+            ← กลับไปแดชบอร์ด
+          </Link>
+          <span className="text-slate-400">|</span>
+          <Link
+            href="/admin/logs"
+            className="hover:text-slate-700 cursor-pointer"
+          >
+            Export Logs
+          </Link>
+        </div>
       </div>
 
       <div className="rounded-2xl bg-white shadow-sm border border-slate-200 p-5 space-y-4">
@@ -161,7 +176,9 @@ export default async function AdminLogsPage({
               ].map((f) => (
                 <Link
                   key={f.key}
-                  href={`?date=${f.key}&page=1&pageSize=${pageSize}&type=${typeFilter}&status=${statusFilter}`}
+                  href={`?date=${f.key}&page=1&pageSize=${pageSize}&category=${categoryFilter}&email=${encodeURIComponent(
+                    emailFilter,
+                  )}&action=${encodeURIComponent(actionFilter)}`}
                   className={`cursor-pointer rounded-full px-2.5 py-0.5 ${
                     dateFilter === f.key
                       ? "bg-slate-900 text-slate-50"
@@ -178,8 +195,9 @@ export default async function AdminLogsPage({
               className="flex items-center gap-1 text-xs"
             >
               <input type="hidden" name="date" value="custom" />
-              <input type="hidden" name="type" value={typeFilter} />
-              <input type="hidden" name="status" value={statusFilter} />
+              <input type="hidden" name="category" value={categoryFilter} />
+              <input type="hidden" name="email" value={emailFilter} />
+              <input type="hidden" name="action" value={actionFilter} />
               <input
                 type="date"
                 name="from"
@@ -202,33 +220,46 @@ export default async function AdminLogsPage({
                 ใช้ช่วงวันที่
               </button>
             </form>
-            {/* Type & status filters */}
-            <form method="GET" className="flex items-center gap-2 text-xs">
+            {/* Category + search filters */}
+            <form
+              method="GET"
+              className="flex flex-wrap items-center gap-2 text-xs"
+            >
               <input type="hidden" name="date" value={dateFilter} />
               {from && <input type="hidden" name="from" value={from} />}
               {to && <input type="hidden" name="to" value={to} />}
               <input type="hidden" name="page" value="1" />
               <input type="hidden" name="pageSize" value={pageSize} />
-              <span className="text-slate-500">ประเภท</span>
+              <span className="text-slate-500">หมวด</span>
               <select
-                name="type"
-                defaultValue={typeFilter}
+                name="category"
+                defaultValue={categoryFilter}
                 className="h-7 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs"
               >
                 <option value="all">ทั้งหมด</option>
-                <option value="manual">Manual</option>
-                <option value="auto">Auto</option>
+                <option value="auth">Auth</option>
+                <option value="export">Export</option>
+                <option value="billing">Billing</option>
+                <option value="admin">Admin</option>
+                <option value="user">User</option>
+                <option value="system">System</option>
               </select>
-              <span className="text-slate-500">สถานะ</span>
-              <select
-                name="status"
-                defaultValue={statusFilter}
-                className="h-7 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs"
-              >
-                <option value="all">ทั้งหมด</option>
-                <option value="success">สำเร็จ</option>
-                <option value="error">ผิดพลาด</option>
-              </select>
+              <span className="text-slate-500">Action</span>
+              <input
+                type="text"
+                name="action"
+                defaultValue={actionFilter}
+                placeholder="เช่น login, admin_login"
+                className="h-7 w-40 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs"
+              />
+              <span className="text-slate-500">อีเมล</span>
+              <input
+                type="text"
+                name="email"
+                defaultValue={emailFilter}
+                placeholder="example@mail.com"
+                className="h-7 w-44 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs"
+              />
               <button
                 type="submit"
                 className="ml-1 rounded-full border border-slate-300 px-2 py-0.5 text-xs text-slate-700 hover:bg-slate-100 cursor-pointer"
@@ -241,8 +272,9 @@ export default async function AdminLogsPage({
               <input type="hidden" name="date" value={dateFilter} />
               {from && <input type="hidden" name="from" value={from} />}
               {to && <input type="hidden" name="to" value={to} />}
-              <input type="hidden" name="type" value={typeFilter} />
-              <input type="hidden" name="status" value={statusFilter} />
+              <input type="hidden" name="category" value={categoryFilter} />
+              <input type="hidden" name="email" value={emailFilter} />
+              <input type="hidden" name="action" value={actionFilter} />
               <span className="text-slate-500">แสดงต่อหน้า</span>
               <select
                 name="pageSize"
@@ -267,7 +299,7 @@ export default async function AdminLogsPage({
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="min-w-full text-xs border-collapse">
+          <table className="min-w-full text-[11px] border-collapse">
             <thead className="bg-slate-50">
               <tr className="text-slate-600">
                 <th className="py-2.5 pl-4 pr-3 text-left font-medium border-b border-r border-slate-200">
@@ -277,31 +309,21 @@ export default async function AdminLogsPage({
                   ผู้ใช้
                 </th>
                 <th className="py-2.5 px-3 text-left font-medium border-b border-r border-slate-200">
-                  ประเภท
+                  หมวด / Action
                 </th>
                 <th className="py-2.5 px-3 text-left font-medium border-b border-r border-slate-200">
-                  คอนฟิก
+                  Path / Method
                 </th>
                 <th className="py-2.5 px-3 text-left font-medium border-b border-r border-slate-200">
-                  IP / Path
-                </th>
-                <th className="py-2.5 px-3 text-left font-medium border-b border-r border-slate-200">
-                  สถานะ
+                  IP / UA
                 </th>
                 <th className="py-2.5 pr-4 pl-3 text-left font-medium border-b border-slate-200">
-                  ข้อความผิดพลาด
+                  Metadata
                 </th>
               </tr>
             </thead>
             <tbody>
-              {logs.map((log, idx) => {
-                const meta: any =
-                  (log as any).details && typeof (log as any).details === "object"
-                    ? (log as any).details.meta ?? null
-                    : null;
-                const ip = meta?.ip ?? "-";
-                const sourcePath = meta?.sourcePath ?? "";
-                return (
+              {logs.map((log) => (
                 <tr key={log.id} className="hover:bg-sky-50/70">
                   <td className="py-2.5 pl-4 pr-3 whitespace-nowrap border-t border-r border-slate-200">
                     {log.createdAt.toLocaleString("th-TH", {
@@ -313,44 +335,51 @@ export default async function AdminLogsPage({
                     {log.user?.email ?? "-"}
                   </td>
                   <td className="py-2.5 px-3 whitespace-nowrap border-t border-r border-slate-200">
-                    {log.exportType}
-                  </td>
-                  <td className="py-2.5 px-3 whitespace-nowrap border-t border-r border-slate-200">
-                    {log.configName ?? "-"}
-                  </td>
-                  <td className="py-2.5 px-3 whitespace-nowrap border-t border-r border-slate-200">
                     <div className="flex flex-col gap-0.5">
-                      <span className="font-mono text-[11px]">{ip}</span>
-                      {sourcePath && (
-                        <span className="text-[11px] text-slate-500">
-                          {sourcePath}
-                        </span>
-                      )}
+                      <span className="uppercase tracking-wide font-semibold text-[11px]">
+                        {log.category}
+                      </span>
+                      <span className="text-[11px] text-slate-600">
+                        {log.action}
+                      </span>
                     </div>
                   </td>
                   <td className="py-2.5 px-3 whitespace-nowrap border-t border-r border-slate-200">
-                    <span
-                      className={
-                        log.status === "success"
-                          ? "inline-flex rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-100"
-                          : "inline-flex rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 border border-red-100"
-                      }
-                    >
-                      {log.status}
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-mono text-[11px]">
+                        {log.method ?? "-"}
+                      </span>
+                      <span className="text-[11px] text-slate-600">
+                        {log.path ?? "-"}
+                      </span>
+                    </div>
                   </td>
-                  <td className="py-2.5 pr-4 pl-3 max-w-xs truncate text-slate-500 border-t border-slate-200">
-                    {log.error ?? "-"}
+                  <td className="py-2.5 px-3 whitespace-nowrap border-t border-r border-slate-200">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-mono text-[11px]">
+                        {log.ip ?? "-"}
+                      </span>
+                      <span className="text-[11px] text-slate-500 max-w-xs truncate">
+                        {log.userAgent ?? "-"}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-2.5 pr-4 pl-3 max-w-xs border-t border-slate-200">
+                    <pre className="max-h-16 overflow-hidden whitespace-pre-wrap break-all text-[10px] text-slate-500">
+                      {log.metadata
+                        ? JSON.stringify(log.metadata, null, 0)
+                        : "-"}
+                    </pre>
                   </td>
                 </tr>
-              )})}
+              ))}
               {logs.length === 0 && (
                 <tr>
                   <td
                     colSpan={6}
                     className="py-6 text-center text-slate-400 text-sm border-t border-slate-200"
                   >
-                    ยังไม่มี logs
+                    ยังไม่มีกิจกรรม
                   </td>
                 </tr>
               )}
@@ -367,7 +396,9 @@ export default async function AdminLogsPage({
             <Link
               href={`?page=1&pageSize=${pageSize}&date=${dateFilter}${
                 from ? `&from=${from}` : ""
-              }${to ? `&to=${to}` : ""}&type=${typeFilter}&status=${statusFilter}`}
+              }${to ? `&to=${to}` : ""}&category=${categoryFilter}&email=${encodeURIComponent(
+                emailFilter,
+              )}&action=${encodeURIComponent(actionFilter)}`}
               className={`px-2 py-1 rounded-md border border-slate-200 cursor-pointer ${
                 page === 1 ? "opacity-50 pointer-events-none" : "bg-white"
               }`}
@@ -375,9 +406,14 @@ export default async function AdminLogsPage({
               หน้าแรก
             </Link>
             <Link
-              href={`?page=${Math.max(1, page - 1)}&pageSize=${pageSize}&date=${dateFilter}${
+              href={`?page=${Math.max(
+                1,
+                page - 1,
+              )}&pageSize=${pageSize}&date=${dateFilter}${
                 from ? `&from=${from}` : ""
-              }${to ? `&to=${to}` : ""}&type=${typeFilter}&status=${statusFilter}`}
+              }${to ? `&to=${to}` : ""}&category=${categoryFilter}&email=${encodeURIComponent(
+                emailFilter,
+              )}&action=${encodeURIComponent(actionFilter)}`}
               className={`px-2 py-1 rounded-md border border-slate-200 cursor-pointer ${
                 page === 1 ? "opacity-50 pointer-events-none" : "bg-white"
               }`}
@@ -385,9 +421,14 @@ export default async function AdminLogsPage({
               ก่อนหน้า
             </Link>
             <Link
-              href={`?page=${Math.min(totalPages, page + 1)}&pageSize=${pageSize}&date=${dateFilter}${
+              href={`?page=${Math.min(
+                totalPages,
+                page + 1,
+              )}&pageSize=${pageSize}&date=${dateFilter}${
                 from ? `&from=${from}` : ""
-              }${to ? `&to=${to}` : ""}&type=${typeFilter}&status=${statusFilter}`}
+              }${to ? `&to=${to}` : ""}&category=${categoryFilter}&email=${encodeURIComponent(
+                emailFilter,
+              )}&action=${encodeURIComponent(actionFilter)}`}
               className={`px-2 py-1 rounded-md border border-slate-200 cursor-pointer ${
                 page === totalPages
                   ? "opacity-50 pointer-events-none"
@@ -399,7 +440,9 @@ export default async function AdminLogsPage({
             <Link
               href={`?page=${totalPages}&pageSize=${pageSize}&date=${dateFilter}${
                 from ? `&from=${from}` : ""
-              }${to ? `&to=${to}` : ""}&type=${typeFilter}&status=${statusFilter}`}
+              }${to ? `&to=${to}` : ""}&category=${categoryFilter}&email=${encodeURIComponent(
+                emailFilter,
+              )}&action=${encodeURIComponent(actionFilter)}`}
               className={`px-2 py-1 rounded-md border border-slate-200 cursor-pointer ${
                 page === totalPages
                   ? "opacity-50 pointer-events-none"

@@ -65,6 +65,12 @@ export async function POST(req: Request) {
   const timezone = userPrefs?.timezone || "Asia/Bangkok";
 
   try {
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      req.headers.get("x-real-ip") ??
+      null;
+    const userAgent = req.headers.get("user-agent") ?? null;
+
     const result = await runExportTask({
       userId: session.user.id,
       fbToken,
@@ -78,7 +84,10 @@ export async function POST(req: Request) {
       configId,
       configName,
       exportType: "manual",
-      timezone
+      timezone,
+      ip,
+      userAgent,
+      sourcePath: "/api/export/run",
     });
 
     return NextResponse.json(result);

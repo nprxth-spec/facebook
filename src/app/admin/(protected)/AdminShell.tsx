@@ -7,7 +7,8 @@ import { useState } from "react";
 const navItems = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/users", label: "Users" },
-  { href: "/admin/logs", label: "Logs" },
+  { href: "/admin/logs", label: "Export Logs" },
+  { href: "/admin/logs/activity", label: "Activity Logs" },
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -16,11 +17,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const [loggingOut, setLoggingOut] = useState(false);
 
   const currentNav =
-    navItems.find((item) =>
-      item.href === "/admin"
-        ? pathname === "/admin"
-        : pathname.startsWith(item.href),
-    ) ?? navItems[0];
+    navItems.find((item) => {
+      if (item.href === "/admin") {
+        return pathname === "/admin";
+      }
+      // แมตช์แบบ prefix แต่ต้องตรง segment แรกเต็ม ๆ
+      return pathname === item.href || pathname.startsWith(item.href + "/");
+    }) ?? navItems[0];
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -52,7 +55,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             const active =
               item.href === "/admin"
                 ? pathname === "/admin"
-                : pathname.startsWith(item.href);
+                : pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
