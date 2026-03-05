@@ -5,10 +5,25 @@ import { getFacebookToken, getGoogleClient } from "@/lib/tokens";
 import { format } from "date-fns";
 
 // Secret token for cron job to prevent unauthorized access
-const CRON_SECRET = process.env.CRON_SECRET || "fallback_secret_key";
-const CRON_BATCH_SIZE = 5; // Process up to 5 export configs concurrently
+// ต้องกำหนดผ่าน env เสมอ ห้ามมี fallback แบบเดิมที่เดาง่าย
+const CRON_SECRET = process.env.CRON_SECRET;
+const CRON_BATCH_SIZE =
+    Number.parseInt(process.env.CRON_BATCH_SIZE || "5") || 5; // Process export configs concurrently
+const MAX_AUTO_EXPORT_CONFIGS =
+    Number.parseInt(process.env.MAX_AUTO_EXPORT_CONFIGS || "50") || 50;
+const MAX_EXPORT_AD_ACCOUNTS =
+    Number.parseInt(process.env.MAX_EXPORT_AD_ACCOUNTS || "25") || 25;
 
 export async function GET(req: Request) {
+    // 0. Guard: ถ้าไม่ตั้งค่า CRON_SECRET ให้ fail ชัดเจน (โดยเฉพาะ production)
+    if (!CRON_SECRET) {
+        console.error("[Auto-Export] CRON_SECRET is not configured");
+        return NextResponse.json(
+            { error: "Cron secret is not configured on the server" },
+            { status: 500 }
+        );
+    }
+
     // 1. Verify cron secret (support both Header and Query Parameter)
     const url = new URL(req.url);
     const secretQuery = url.searchParams.get("secret");
@@ -35,14 +50,24 @@ export async function GET(req: Request) {
             return NextResponse.json({ message: "No auto-export configs found" });
         }
 
+        if (autoConfigs.length > MAX_AUTO_EXPORT_CONFIGS) {
+            console.warn(
+                `[Auto-Export] Too many auto configs (${autoConfigs.length}). Limiting to first ${MAX_AUTO_EXPORT_CONFIGS}.`
+            );
+        }
+
+        const limitedAutoConfigs = autoConfigs.slice(0, MAX_AUTO_EXPORT_CONFIGS);
+
         const now = new Date();
         const forceRun = url.searchParams.get("force") === "true";
 
-        console.log(`[Auto-Export] Run triggered at ${now.toISOString()} | Configs: ${autoConfigs.length} | Force: ${forceRun}`);
+        console.log(
+            `[Auto-Export] Run triggered at ${now.toISOString()} | Configs: ${autoConfigs.length} (processing up to ${limitedAutoConfigs.length}) | Force: ${forceRun}`
+        );
 
         // 3. Filter configs that should run now (schedule + dedup check)
         const configsToRun = await Promise.all(
-            autoConfigs.map(async (config) => {
+            limitedAutoConfigs.map(async (config) => {
                 const userTimezone = config.user.preferences?.timezone || "Asia/Bangkok";
                 const userTime = new Date(now.toLocaleString("en-US", { timeZone: userTimezone }));
                 const currentHour = userTime.getHours().toString().padStart(2, "0");
@@ -84,7 +109,7 @@ export async function GET(req: Request) {
             })
         );
 
-        const pending = configsToRun.filter(Boolean) as typeof autoConfigs;
+        const pending = configsToRun.filter(Boolean) as typeof limitedAutoConfigs;
         console.log(`[Auto-Export] Pending: ${pending.length} configs`);
 
         let processedCount = 0;
@@ -107,6 +132,13 @@ export async function GET(req: Request) {
 
                         const userTimezone = config.user.preferences?.timezone || "Asia/Bangkok";
                         const columnMapping = config.columnMapping as Array<{ fbCol: string; sheetCol: string }>;
+
+                        if (config.adAccountIds.length > MAX_EXPORT_AD_ACCOUNTS) {
+                            const msg = `Too many ad accounts (${config.adAccountIds.length}) in auto config "${config.name}". Max allowed is ${MAX_EXPORT_AD_ACCOUNTS}.`;
+                            console.warn("[Auto-Export] " + msg);
+                            errors.push(msg);
+                            return;
+                        }
 
                         await runExportTask({
                             userId: config.userId,
@@ -138,7 +170,7 @@ export async function GET(req: Request) {
         return NextResponse.json({
             success: true,
             processed: processedCount,
-            skipped: autoConfigs.length - pending.length,
+            skipped: limitedAutoConfigs.length - pending.length,
             errors: errors.length > 0 ? errors : undefined,
         });
     } catch (err: unknown) {

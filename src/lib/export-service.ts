@@ -1,6 +1,7 @@
 import { google } from "googleapis";
-import { format, subDays } from "date-fns";
+import { format, subDays, differenceInCalendarDays } from "date-fns";
 import { prisma } from "@/lib/db";
+import { runWithConcurrency } from "@/lib/concurrency";
 
 const FB_API = "https://graph.facebook.com/v19.0";
 
@@ -62,6 +63,12 @@ export interface ExportServiceOptions {
     exportType?: "manual" | "auto";
     timezone?: string;
 }
+
+const MAX_EXPORT_DAYS_SINGLE_REQUEST =
+    Number.parseInt(process.env.MAX_EXPORT_DAYS_SINGLE_REQUEST || "30") || 30;
+
+const FB_EXPORT_CONCURRENCY =
+    Number.parseInt(process.env.FB_EXPORT_CONCURRENCY || "3") || 3;
 
 function colLetterToIndex(letter: string): number {
     let result = 0;
@@ -292,10 +299,77 @@ export async function runExportTask(options: ExportServiceOptions) {
 
     try {
         const allFbRows: Record<string, unknown>[] = [];
-        for (const accountId of adAccountIds) {
-            const rows = await fetchFbInsights(accountId, fbToken, since, until, fbFields);
-            allFbRows.push(...rows);
+
+        // แบ่งช่วงวันที่เป็น chunk หากยาวเกิน threshold เพื่อไม่ให้ request เดียวโหลดข้อมูลหนักเกินไป
+        const dateChunks: { since: string; until: string }[] = [];
+        try {
+            const sinceDate = new Date(since);
+            const untilDate = new Date(until);
+            const totalDays = Math.max(
+                0,
+                differenceInCalendarDays(untilDate, sinceDate)
+            );
+
+            if (totalDays > MAX_EXPORT_DAYS_SINGLE_REQUEST) {
+                let cursor = sinceDate;
+                while (cursor <= untilDate) {
+                    const chunkStart = new Date(cursor);
+                    const chunkEnd = new Date(
+                        Math.min(
+                            untilDate.getTime(),
+                            cursor.getTime() +
+                                MAX_EXPORT_DAYS_SINGLE_REQUEST *
+                                    24 *
+                                    60 *
+                                    60 *
+                                    1000
+                        )
+                    );
+                    dateChunks.push({
+                        since: format(chunkStart, "yyyy-MM-dd"),
+                        until: format(chunkEnd, "yyyy-MM-dd"),
+                    });
+                    cursor = new Date(
+                        chunkEnd.getTime() + 24 * 60 * 60 * 1000
+                    );
+                }
+            } else {
+                dateChunks.push({ since, until });
+            }
+        } catch {
+            dateChunks.push({ since, until });
         }
+
+        const fbFetchStart = Date.now();
+
+        await runWithConcurrency(
+            adAccountIds,
+            FB_EXPORT_CONCURRENCY,
+            async (accountId) => {
+                for (const chunk of dateChunks) {
+                    const rows = await fetchFbInsights(
+                        accountId,
+                        fbToken,
+                        chunk.since,
+                        chunk.until,
+                        fbFields
+                    );
+                    allFbRows.push(...rows);
+                }
+                return null;
+            }
+        );
+
+        const fbFetchEnd = Date.now();
+        console.log(
+            "[ExportTask] Fetched insights",
+            {
+                accounts: adAccountIds.length,
+                dateChunks: dateChunks.length,
+                rows: allFbRows.length,
+                durationMs: fbFetchEnd - fbFetchStart,
+            }
+        );
 
         const statsCols = new Set(["F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T"]);
         const statsMappings = columnMapping.filter(m => statsCols.has(m.sheetCol) && m.fbCol && m.fbCol !== "__skip__");
@@ -344,12 +418,38 @@ export async function runExportTask(options: ExportServiceOptions) {
         let finalFbRows = filteredFbRows;
 
         if (writeMode === "append") {
+            const sheetsReadStart = Date.now();
+
             const existing = await sheetsClient.spreadsheets.values.get({
                 spreadsheetId: googleSheetId,
-                range: `'${sheetTab}'!A:ZZ`, // Read a wider range to get dates and ad_ids
+                range: (() => {
+                    const dateColMapping = columnMapping.find(
+                        (m) =>
+                            m.fbCol === "date" && m.sheetCol !== "__skip__"
+                    );
+                    const adIdColMapping = columnMapping.find(
+                        (m) =>
+                            m.fbCol === "ad_id" && m.sheetCol !== "__skip__"
+                    );
+                    if (!dateColMapping || !adIdColMapping) {
+                        return `'${sheetTab}'!A:ZZ`;
+                    }
+                    const dateIdx = colLetterToIndex(dateColMapping.sheetCol);
+                    const adIdx = colLetterToIndex(adIdColMapping.sheetCol);
+                    const startIdx = Math.min(dateIdx, adIdx);
+                    const endIdx = Math.max(dateIdx, adIdx);
+                    const startCol = indexToColLetter(startIdx);
+                    const endCol = indexToColLetter(endIdx);
+                    return `'${sheetTab}'!${startCol}:${endCol}`;
+                })(), // อ่านเฉพาะช่วงคอลัมน์ที่ใช้สำหรับ dedup
             });
             const rows = existing.data.values || [];
             startRow = rows.length + 1;
+
+            const MAX_DEDUP_ROWS =
+                Number.parseInt(
+                    process.env.MAX_DEDUP_ROWS_PER_EXPORT || "5000"
+                ) || 5000;
 
             // Deduplication logic: Check for existing Date + Ad ID
             const dateColMapping = columnMapping.find(m => m.fbCol === "date" && m.sheetCol !== "__skip__");
@@ -360,7 +460,8 @@ export async function runExportTask(options: ExportServiceOptions) {
                 const adIdColIndex = colLetterToIndex(adIdColMapping.sheetCol);
                 const existingPairs = new Set<string>();
 
-                for (let i = 1; i < rows.length; i++) { // Skip row 0 (header)
+                const startIndex = Math.max(1, rows.length - MAX_DEDUP_ROWS);
+                for (let i = startIndex; i < rows.length; i++) { // Skip header และจำกัดจำนวนแถวที่ใช้ dedup
                     const row = rows[i];
                     const rowDate = row[dateColIndex];
                     const rowAdId = row[adIdColIndex];
@@ -385,6 +486,17 @@ export async function runExportTask(options: ExportServiceOptions) {
                     });
                 }
             }
+
+            const sheetsReadEnd = Date.now();
+            console.log(
+                "[ExportTask] Dedup existing rows",
+                {
+                    checkedRows: rows.length,
+                    dedupWindow: Math.min(rows.length, MAX_DEDUP_ROWS),
+                    remainingAfterDedup: finalFbRows.length,
+                    durationMs: sheetsReadEnd - sheetsReadStart,
+                }
+            );
         }
 
         totalRows = finalFbRows.length; // Ensure totalRows accounts for deduplication

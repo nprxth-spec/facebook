@@ -164,4 +164,13 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+  button,
+  [type="button"],
+  [type="submit"],
+  [type="reset"],
+  a[href],
+  [role="button"],
+  [aria-pressed] {
+    @apply cursor-pointer;
+  }
 }

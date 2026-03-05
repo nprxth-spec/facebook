@@ -5,6 +5,9 @@ import { runExportTask } from "@/lib/export-service";
 import { prisma } from "@/lib/db";
 import { assertSameOrigin } from "@/lib/security";
 
+const MAX_EXPORT_AD_ACCOUNTS =
+  Number.parseInt(process.env.MAX_EXPORT_AD_ACCOUNTS || "25") || 25;
+
 interface ColumnMapping {
   fbCol: string;
   sheetCol: string;
@@ -37,6 +40,14 @@ export async function POST(req: Request) {
   const { adAccountIds, googleSheetId, sheetTab, columnMapping, writeMode, dataDate, configId, configName } = body;
 
   if (!adAccountIds?.length) return NextResponse.json({ error: "No ad accounts selected" }, { status: 400 });
+  if (adAccountIds.length > MAX_EXPORT_AD_ACCOUNTS) {
+    return NextResponse.json(
+      {
+        error: `Too many ad accounts in one export. Please select at most ${MAX_EXPORT_AD_ACCOUNTS} accounts or split into multiple runs.`,
+      },
+      { status: 400 }
+    );
+  }
   if (!googleSheetId) return NextResponse.json({ error: "No Google Sheet selected" }, { status: 400 });
   if (!sheetTab) return NextResponse.json({ error: "No sheet tab selected" }, { status: 400 });
   if (!columnMapping?.length) return NextResponse.json({ error: "No column mapping" }, { status: 400 });

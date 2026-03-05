@@ -1,6 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useCallback,
+} from "react";
 import { useSession } from "next-auth/react";
 import { translations, Language } from "@/lib/translations";
 
@@ -38,6 +45,7 @@ export function ThemeProvider({
     initialLanguage?: Language;
 }) {
     const { data: session } = useSession();
+    // เริ่มต้นด้วย "light" ทั้งฝั่ง server และ client เพื่อลด hydration mismatch
     const [theme, setThemeState] = useState<Theme>("light");
     const [accentColor, setAccentColorState] = useState("blue");
     const [language, setLanguageState] = useState<Language>(initialLanguage);
@@ -80,7 +88,20 @@ export function ThemeProvider({
         }
     }, [session, refreshPreferences]);
 
+    // สำหรับผู้ใช้ที่ยังไม่ได้ล็อกอิน เก็บค่าลง localStorage แทน
     useEffect(() => {
+        if (!session && typeof window !== "undefined") {
+            const storedTheme = window.localStorage.getItem("centxo:theme") as Theme | null;
+            const storedLang = window.localStorage.getItem("centxo:language") as Language | null;
+            const storedTz = window.localStorage.getItem("centxo:timezone");
+            if (storedTheme) setThemeState(storedTheme);
+            if (storedLang) setLanguageState(storedLang);
+            if (storedTz) setTimezoneState(storedTz);
+        }
+    }, [session]);
+
+    // ใช้ useLayoutEffect ลดอาการหน้ากระพริบตอนสลับธีม
+    useLayoutEffect(() => {
         applyTheme(theme);
     }, [theme, applyTheme]);
 
@@ -92,10 +113,40 @@ export function ThemeProvider({
         document.documentElement.lang = language;
     }, [language]);
 
-    const setTheme = (t: Theme) => setThemeState(t);
-    const setAccentColor = (c: string) => setAccentColorState(c);
-    const setLanguage = (l: Language) => setLanguageState(l);
-    const setTimezone = (tz: string) => setTimezoneState(tz);
+    const persistPrefs = async (data: Partial<{ theme: Theme; accentColor: string; language: Language; timezone: string }>) => {
+        try {
+            if (session) {
+                await fetch("/api/user/preferences", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(data),
+                });
+            } else if (typeof window !== "undefined") {
+                if (data.theme) window.localStorage.setItem("centxo:theme", data.theme);
+                if (data.language) window.localStorage.setItem("centxo:language", data.language);
+                if (data.timezone) window.localStorage.setItem("centxo:timezone", data.timezone);
+            }
+        } catch (e) {
+            console.error("Failed to persist preferences", e);
+        }
+    };
+
+    const setTheme = (t: Theme) => {
+        setThemeState(t);
+        void persistPrefs({ theme: t });
+    };
+    const setAccentColor = (c: string) => {
+        setAccentColorState(c);
+        void persistPrefs({ accentColor: c as string });
+    };
+    const setLanguage = (l: Language) => {
+        setLanguageState(l);
+        void persistPrefs({ language: l });
+    };
+    const setTimezone = (tz: string) => {
+        setTimezoneState(tz);
+        void persistPrefs({ timezone: tz });
+    };
 
     const t = useCallback((path: string): string => {
         const keys = path.split(".");

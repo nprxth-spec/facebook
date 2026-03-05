@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getFacebookToken } from "@/lib/tokens";
+import { assertSameOrigin } from "@/lib/security";
 
 const FB_API = "https://graph.facebook.com/v22.0";
 
@@ -55,6 +56,9 @@ export async function POST(request: NextRequest) {
     try {
         const session = await auth();
         if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+        // ป้องกัน CSRF สำหรับการสร้าง/ลบกลุ่มเป้าหมาย
+        assertSameOrigin(request);
 
         const body = await request.json();
         const {

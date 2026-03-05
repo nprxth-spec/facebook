@@ -1,6 +1,10 @@
 import { auth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { assertSameOrigin } from "@/lib/security";
+import { stripe } from "@/lib/stripe";
+import { BILLING_PLANS, getPlanConfig, type PlanId } from "@/lib/billing-plans";
+import { prisma } from "@/lib/db";
 
 const openai = process.env.OPENAI_API_KEY
     ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
@@ -8,12 +12,105 @@ const openai = process.env.OPENAI_API_KEY
 
 export async function POST(req: NextRequest) {
     const session = await auth();
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session.user?.email) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // ป้องกัน CSRF สำหรับการยิง AI วิเคราะห์ (ลดโอกาสโดนยิง request จากภายนอกโดยไม่รู้ตัว)
+    assertSameOrigin(req);
+
     if (!openai) {
         return NextResponse.json({ error: "OpenAI is not configured" }, { status: 500 });
+    }
+
+    // ── Plan & AI credits guardrails ────────────────────────────────────────
+    let planId: PlanId = "free";
+    try {
+        const search = await stripe.customers.search({
+            query: `email:\"${session.user.email}\"`,
+            limit: 1,
+        });
+        const customer = search.data[0];
+        if (customer) {
+            const subs = await stripe.subscriptions.list({
+                customer: customer.id,
+                status: "all",
+                limit: 5,
+            });
+            const activeSub = subs.data.find((s) =>
+                ["active", "trialing", "past_due", "unpaid", "incomplete"].includes(
+                    String(s.status || "").toLowerCase(),
+                ),
+            );
+            const metaPlan = (activeSub?.metadata as any)?.planId as PlanId | null;
+            if (metaPlan === "pro" || metaPlan === "business") {
+                planId = metaPlan;
+            }
+        }
+    } catch {
+        planId = "free";
+    }
+    const planConfig = getPlanConfig(planId);
+
+    // Trial history (anti-abuse by email)
+    let trial = await prisma.trialHistory.findUnique({
+        where: { email: session.user.email! },
+    });
+    if (!trial) {
+        const now = new Date();
+        trial = await prisma.trialHistory.create({
+            data: {
+                email: session.user.email!,
+                firstSignupAt: now,
+                freeTrialStartedAt: now,
+            },
+        });
+    }
+
+    const trialStart = trial.freeTrialStartedAt;
+    const trialExpiredAt =
+        trial.freeTrialExpiredAt ??
+        new Date(trialStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const inTrialWindow = now <= trialExpiredAt;
+
+    const currentMonth = `${now.getFullYear()}-${String(
+        now.getMonth() + 1,
+    ).padStart(2, "0")}`;
+    let aiUsage = await prisma.aiUsage.findUnique({
+        where: { userId_month: { userId: session.user.id, month: currentMonth } },
+    });
+    if (!aiUsage) {
+        aiUsage = await prisma.aiUsage.create({
+            data: { userId: session.user.id, month: currentMonth, used: 0 },
+        });
+    }
+
+    let remainingCredits = 0;
+    if (planId === "free" && inTrialWindow) {
+        const totalTrialUsage = await prisma.aiUsage.aggregate({
+            where: { userId: session.user.id },
+            _sum: { used: true },
+        });
+        const usedTrial = totalTrialUsage._sum.used ?? 0;
+        remainingCredits = BILLING_PLANS.free.aiCreditsTrialTotal - usedTrial;
+    } else if (planId === "pro" || planId === "business") {
+        remainingCredits = planConfig.aiCreditsPerMonth - (aiUsage.used ?? 0);
+    } else {
+        remainingCredits = 0;
+    }
+
+    if (remainingCredits <= 0) {
+        return NextResponse.json(
+            {
+                error:
+                    planId === "free"
+                        ? "คุณใช้เครดิต AI สำหรับช่วงทดลองครบแล้ว กรุณาอัปเกรดแพ็กเกจเพื่อใช้ต่อ"
+                        : "คุณใช้เครดิต AI ของเดือนนี้ครบแล้ว กรุณารอเดือนถัดไปหรืออัปเกรดแพ็กเกจ",
+                code: "AI_CREDITS_EXHAUSTED",
+            },
+            { status: 429 },
+        );
     }
 
     try {
@@ -121,7 +218,7 @@ Return ONLY this JSON structure:
 }`;
 
         const response = await openai.chat.completions.create({
-            model: "gpt-4o",
+            model: "gpt-4.1-mini",
             messages: [
                 { role: "system", content: systemPrompt },
                 {
@@ -141,6 +238,11 @@ Return ONLY this JSON structure:
         if (!raw) throw new Error("No response from AI");
 
         const result = JSON.parse(raw);
+
+        await prisma.aiUsage.update({
+            where: { userId_month: { userId: session.user.id, month: currentMonth } },
+            data: { used: { increment: 1 } },
+        });
 
         return NextResponse.json({
             caption: result.caption || "",

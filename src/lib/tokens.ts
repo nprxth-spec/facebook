@@ -16,6 +16,8 @@ export async function getGoogleClient(userId: string) {
   const account = await getProviderToken(userId, "google");
   if (!account) return null;
 
+  const hasRefreshToken = !!account.refresh_token;
+
   const oauth2 = new google.auth.OAuth2(
     process.env.AUTH_GOOGLE_ID,
     process.env.AUTH_GOOGLE_SECRET
@@ -23,8 +25,9 @@ export async function getGoogleClient(userId: string) {
 
   oauth2.setCredentials({
     access_token: account.access_token,
-    refresh_token: account.refresh_token ?? undefined,
-    expiry_date: account.expires_at ? account.expires_at * 1000 : undefined,
+    // ถ้าไม่มี refresh_token ให้ไม่ตั้ง expiry_date เพื่อไม่ให้ไลบรารีพยายาม refresh แล้ว error ว่า "No refresh token is set"
+    refresh_token: hasRefreshToken ? account.refresh_token ?? undefined : undefined,
+    expiry_date: hasRefreshToken && account.expires_at ? account.expires_at * 1000 : undefined,
   });
 
   // Auto-refresh ถ้า token หมดอายุ และอัปเดตใน DB

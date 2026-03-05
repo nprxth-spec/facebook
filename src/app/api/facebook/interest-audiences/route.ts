@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getFacebookToken } from "@/lib/tokens";
+import { assertSameOrigin } from "@/lib/security";
 import OpenAI from "openai";
+import { stripe } from "@/lib/stripe";
+import { BILLING_PLANS, getPlanConfig, type PlanId } from "@/lib/billing-plans";
 
 // Initialize OpenAI client (conditional for build time)
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -59,10 +62,111 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     try {
         const session = await auth();
-        if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user?.id || !session.user.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-        const body = await request.json();
-        const { action = "generate", description, name, interests, presetId, adAccountId, manualInterests } = body;
+        // ป้องกัน CSRF สำหรับการสร้าง/ลบ preset และการยิง AI ที่ผูกกับบัญชีผู้ใช้
+        assertSameOrigin(request);
+
+    const body = await request.json();
+    const { action = "generate", description, name, interests, presetId, adAccountId, manualInterests } = body;
+
+    // ── Plan & AI credits guardrails ────────────────────────────────────────
+    // ดึง subscription ปัจจุบันจาก Stripe โดยอิงจากอีเมล
+    let planId: PlanId = "free";
+    try {
+      const search = await stripe.customers.search({
+        query: `email:\"${session.user.email}\"`,
+        limit: 1,
+      });
+      const customer = search.data[0];
+      if (customer) {
+        const subs = await stripe.subscriptions.list({
+          customer: customer.id,
+          status: "all",
+          limit: 5,
+        });
+        const activeSub = subs.data.find((s) =>
+          ["active", "trialing", "past_due", "unpaid", "incomplete"].includes(
+            String(s.status || "").toLowerCase(),
+          ),
+        );
+        const metaPlan = (activeSub?.metadata as any)?.planId as PlanId | null;
+        if (metaPlan === "pro" || metaPlan === "business") {
+          planId = metaPlan;
+        }
+      }
+    } catch {
+      // ถ้าเรียก overview ไม่ได้ ให้ fallback เป็น free แต่อย่าบล็อก request ด้วย error 500
+      planId = "free";
+    }
+    const planConfig = getPlanConfig(planId);
+
+    // ตรวจสอบสิทธิ์การใช้ AI สำหรับแต่ละแพ็กเกจ + เครดิต
+    // 1) ดึงหรือสร้าง trial history (กันใช้ trial ซ้ำระหว่างลบ/สมัครใหม่ด้วยอีเมลเดิม)
+    let trial = await prisma.trialHistory.findUnique({
+      where: { email: session.user.email! },
+    });
+    if (!trial) {
+      const now = new Date();
+      trial = await prisma.trialHistory.create({
+        data: {
+          email: session.user.email!,
+          firstSignupAt: now,
+          freeTrialStartedAt: now,
+        },
+      });
+    }
+
+    const trialStart = trial.freeTrialStartedAt;
+    const trialExpiredAt =
+      trial.freeTrialExpiredAt ??
+      new Date(trialStart.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const inTrialWindow = now <= trialExpiredAt;
+
+    const currentMonth = `${now.getFullYear()}-${String(
+      now.getMonth() + 1,
+    ).padStart(2, "0")}`;
+    let aiUsage = await prisma.aiUsage.findUnique({
+      where: { userId_month: { userId: session.user.id, month: currentMonth } },
+    });
+    if (!aiUsage) {
+      aiUsage = await prisma.aiUsage.create({
+        data: { userId: session.user.id, month: currentMonth, used: 0 },
+      });
+    }
+
+    // คำนวณเครดิตคงเหลือ
+    let remainingCredits = 0;
+    if (planId === "free" && inTrialWindow) {
+      // นับจาก usage ทุกเดือนรวมกันในช่วง trial
+      const totalTrialUsage = await prisma.aiUsage.aggregate({
+        where: { userId: session.user.id },
+        _sum: { used: true },
+      });
+      const usedTrial = totalTrialUsage._sum.used ?? 0;
+      remainingCredits = BILLING_PLANS.free.aiCreditsTrialTotal - usedTrial;
+    } else if (planId === "pro" || planId === "business") {
+      remainingCredits = planConfig.aiCreditsPerMonth - (aiUsage.used ?? 0);
+    } else {
+      // free แต่ trial หมดแล้ว → ไม่ให้ใช้ AI
+      remainingCredits = 0;
+    }
+
+    if (remainingCredits <= 0) {
+      return NextResponse.json(
+        {
+          error:
+            planId === "free"
+              ? "คุณใช้เครดิต AI สำหรับช่วงทดลองครบแล้ว กรุณาอัปเกรดแพ็กเกจเพื่อใช้ต่อ"
+              : "คุณใช้เครดิต AI ของเดือนนี้ครบแล้ว กรุณารอเดือนถัดไปหรืออัปเกรดแพ็กเกจ",
+          code: "AI_CREDITS_EXHAUSTED",
+        },
+        { status: 429 },
+      );
+    }
 
         // --- Action: Generate (AI or Manual) ---
         if (action === "generate") {
@@ -97,7 +201,7 @@ export async function POST(request: NextRequest) {
                     }
 
                     const aiResponse = await openai.chat.completions.create({
-                        model: "gpt-4o",
+                        model: "gpt-4.1-mini",
                         messages: [{ role: "user", content: prompt }],
                         response_format: { type: "json_object" }, // Guarantee JSON
                         temperature: 0.7,
@@ -138,6 +242,12 @@ export async function POST(request: NextRequest) {
                     validated = await validateInterests(interestNames, accessToken);
                 }
             }
+
+            // หักเครดิต AI 1 ครั้งหลังเรียก OpenAI สำเร็จ
+            await prisma.aiUsage.update({
+                where: { userId_month: { userId: session.user.id, month: currentMonth } },
+                data: { used: { increment: 1 } },
+            });
 
             return NextResponse.json({ interests: interestNames, suggestedName, validated });
         }

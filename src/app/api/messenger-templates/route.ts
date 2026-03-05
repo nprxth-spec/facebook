@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { assertSameOrigin } from "@/lib/security";
 
 export async function GET() {
     const session = await auth();
@@ -21,6 +22,9 @@ export async function GET() {
 export async function POST(req: Request) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // ป้องกัน CSRF สำหรับการสร้าง/แก้ไข template
+    assertSameOrigin(req);
 
     try {
         const { name, greeting, iceBreakers } = await req.json();

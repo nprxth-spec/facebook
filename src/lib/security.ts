@@ -11,7 +11,11 @@ export function assertSameOrigin(req: Request) {
     process.env.NEXTAUTH_URL;
 
   if (!allowedUrl) {
-    // ถ้าไม่ได้ตั้งค่า base URL ไว้ จะไม่บังคับตรวจ Origin เพื่อไม่ให้ระบบพัง
+    // ใน production ต้องตั้งค่า base URL ให้ชัดเจน ไม่งั้นให้ fail ทันทีเพื่อไม่ให้ CSRF protection หายไปเงียบ ๆ
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Base URL env not configured for origin check");
+    }
+    // ใน dev/preview ยังอนุโลมเพื่อไม่ให้ developer ติดขัด
     return;
   }
 

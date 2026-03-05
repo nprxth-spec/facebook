@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { getFacebookToken } from "@/lib/tokens";
 import { NextRequest, NextResponse } from "next/server";
+import { assertSameOrigin } from "@/lib/security";
 
 const FB_API = "https://graph.facebook.com/v19.0";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -70,6 +71,9 @@ async function uploadVideoToFacebook(
 export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // ป้องกัน CSRF สำหรับการสร้างแคมเปญ/โครงสร้างโฆษณา
+    assertSameOrigin(req);
 
     const token = await getFacebookToken(session.user.id);
     if (!token) return NextResponse.json({ error: "Facebook account not connected" }, { status: 400 });

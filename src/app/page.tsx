@@ -18,7 +18,9 @@ import {
   Users,
   Wand2,
   Target,
-  Play
+  Play,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { useTheme } from "@/components/providers/ThemeProvider";
 
@@ -45,7 +47,7 @@ const benefitsEn = [
 export default function LandingPage() {
   const router = useRouter();
   const { status } = useSession();
-  const { language } = useTheme();
+  const { language, setLanguage, theme, setTheme } = useTheme();
   const isThai = language === "th";
   const benefits = isThai ? benefitsTh : benefitsEn;
 
@@ -77,7 +79,7 @@ export default function LandingPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-slate-700 border border-slate-200 hover:bg-slate-50 dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/5"
+                className="text-slate-700 border border-slate-200 hover:bg-slate-50 dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/5 cursor-pointer"
               >
                 {isThai ? "เข้าสู่ระบบ" : "Log in"}
               </Button>
@@ -85,7 +87,7 @@ export default function LandingPage() {
             <Link href="/login">
               <Button
                 size="sm"
-                className="bg-gradient-to-r from-blue-500 to-cyan-400 text-white border-none shadow-[0_18px_45px_rgba(37,99,235,0.45)] hover:from-blue-400 hover:to-cyan-300"
+                className="bg-gradient-to-r from-blue-500 to-cyan-400 text-white border-none shadow-[0_18px_45px_rgba(37,99,235,0.45)] hover:from-blue-400 hover:to-cyan-300 cursor-pointer"
               >
                 {isThai ? "เริ่มต้นฟรี" : "Start for free"}
               </Button>
@@ -138,7 +140,7 @@ export default function LandingPage() {
                 <Link href="/login">
                   <Button
                     size="lg"
-                    className="gap-2 px-7 bg-gradient-to-r from-blue-500 to-cyan-400 text-white border-none shadow-[0_20px_45px_rgba(37,99,235,0.55)] hover:from-blue-400 hover:to-cyan-300"
+                    className="gap-2 px-7 bg-gradient-to-r from-blue-500 to-cyan-400 text-white border-none shadow-[0_20px_45px_rgba(37,99,235,0.55)] hover:from-blue-400 hover:to-cyan-300 cursor-pointer"
                   >
                     {isThai ? "เริ่มใช้งานฟรี" : "Get started for free"}
                     <ArrowRight className="w-4 h-4" />
@@ -148,7 +150,7 @@ export default function LandingPage() {
                   <Button
                     variant="outline"
                     size="lg"
-                    className="px-6 border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/20 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/5"
+                    className="px-6 border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/20 dark:bg-transparent dark:text-slate-100 dark:hover:bg-white/5 cursor-pointer"
                   >
                     {isThai ? "ดูฟีเจอร์" : "View features"}
                   </Button>
@@ -612,15 +614,78 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 dark:border-gray-800 py-10 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <img src="/centxo-logo.png" alt="Centxo Logo" className="w-7 h-7 object-contain" />
-            <span className="font-bold text-gray-900 dark:text-white">Centxo</span>
+      <footer className="border-t border-gray-200 dark:border-gray-800 py-6 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-4 flex-col sm:flex-row">
+            <div className="flex items-center gap-2">
+              <img src="/centxo-logo.png" alt="Centxo Logo" className="w-7 h-7 object-contain" />
+              <span className="font-bold text-gray-900 dark:text-white">Centxo</span>
+            </div>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {isThai ? "© 2026 Centxo. สงวนลิขสิทธิ์ทั้งหมด" : "© 2026 Centxo. All rights reserved."}
-          </p>
+
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
+              {isThai
+                ? "© 2026 Centxo. สงวนลิขสิทธิ์ทั้งหมด"
+                : "© 2026 Centxo. All rights reserved."}
+            </p>
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 justify-start sm:justify-end">
+              <Link href="/terms" className="hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">
+                {isThai ? "เงื่อนไขการใช้งาน" : "Terms of Service"}
+              </Link>
+              <Link href="/privacy" className="hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">
+                {isThai ? "นโยบายความเป็นส่วนตัว" : "Privacy Policy"}
+              </Link>
+              <Link href="/data" className="hover:text-gray-700 dark:hover:text-gray-200 cursor-pointer">
+                {isThai ? "การเก็บและลบข้อมูล" : "Data retention & deletion"}
+              </Link>
+              <span className="hidden sm:inline-block h-3 w-px bg-gray-200 dark:bg-gray-700" />
+              <div className="flex items-center gap-2">
+                <div className="relative inline-flex items-center">
+                  <span className="pointer-events-none absolute left-1.5 inline-flex w-4 h-3 rounded-[2px] overflow-hidden border border-gray-300 dark:border-gray-600">
+                    {isThai ? (
+                      <span className="flex flex-col w-full h-full">
+                        <span className="flex-[2] bg-[#A51931]" />
+                        <span className="flex-[2] bg-white" />
+                        <span className="flex-[3] bg-[#2D2A4A]" />
+                        <span className="flex-[2] bg-white" />
+                        <span className="flex-[2] bg-[#A51931]" />
+                      </span>
+                    ) : (
+                      <span className="flex w-full h-full">
+                        <span className="w-2/5 h-full bg-[#3C3B6E]" />
+                        <span className="w-3/5 h-full flex flex-col">
+                          <span className="flex-1 bg-[#B22234]" />
+                          <span className="flex-1 bg-white" />
+                          <span className="flex-1 bg-[#B22234]" />
+                        </span>
+                      </span>
+                    )}
+                  </span>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value as any)}
+                    className="h-7 rounded border border-gray-200 bg-white pl-7 pr-2 text-[11px] text-gray-600 dark:bg-gray-900 dark:border-gray-700 dark:text-gray-200 cursor-pointer appearance-none"
+                  >
+                    <option value="th">ไทย (TH)</option>
+                    <option value="en">English (EN)</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800 cursor-pointer"
+                  aria-label={isThai ? "สลับธีม" : "Toggle theme"}
+                >
+                  {theme === "dark" ? (
+                    <Sun className="w-3.5 h-3.5" />
+                  ) : (
+                    <Moon className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </footer>
     </div>

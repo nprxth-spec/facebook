@@ -16,7 +16,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           scope:
             "openid email profile https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly",
           access_type: "offline",
-          prompt: "select_account",
+          // ใช้ consent + select_account เพื่อให้ Google ส่ง refresh_token แน่นอน
+          // และให้ผู้ใช้เลือกบัญชีได้ทุกครั้ง
+          prompt: "consent select_account",
         },
       },
     }),
@@ -90,9 +92,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   callbacks: {
-    async session({ session, user }) {
+  async session({ session, user }) {
       if (session.user) {
         session.user.id = user.id;
+        session.user.image = user.image;
         const accounts = await prisma.account.findMany({
           where: { userId: user.id },
           select: { provider: true },
@@ -101,8 +104,51 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return session;
     },
-    async signIn({ user, account }) {
+  async signIn({ user, account }) {
       if (!user.email) return true;
+
+      // When signing in with Google, try to persist the Google profile picture
+      // into User.image so we can reuse it in future sessions.
+      if (account?.provider === "google" && account.id_token) {
+        try {
+          const [, payloadB64] = account.id_token.split(".");
+          if (payloadB64) {
+            const payloadJson = Buffer.from(payloadB64, "base64").toString("utf8");
+            const payload = JSON.parse(payloadJson) as { picture?: string };
+            if (payload.picture) {
+              await prisma.user.update({
+                where: { id: user.id },
+                data: { image: payload.picture },
+              });
+            }
+          }
+        } catch (e) {
+          console.error("Failed to persist Google profile image from id_token:", e);
+        }
+      }
+
+      // Ensure TrialHistory exists for this email (ใช้กันการลบแล้วสมัครใหม่เอา trial ซ้ำ)
+      try {
+        const email = user.email;
+        if (email) {
+          const existing = await prisma.trialHistory.findUnique({
+            where: { email },
+          });
+          if (!existing) {
+            const now = new Date();
+            await prisma.trialHistory.create({
+              data: {
+                email,
+                firstSignupAt: now,
+                freeTrialStartedAt: now,
+              },
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Failed to ensure TrialHistory on signIn:", e);
+      }
+
       return true;
     },
   },

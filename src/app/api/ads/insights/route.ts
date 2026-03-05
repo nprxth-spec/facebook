@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getFacebookToken } from "@/lib/tokens";
 import { NextResponse } from "next/server";
 import { cacheGet, cacheSet } from "@/lib/cache";
+import { runWithConcurrency } from "@/lib/concurrency";
 
 const FB_API = "https://graph.facebook.com/v19.0";
 
@@ -14,6 +15,13 @@ interface AdsInsightsQuery {
 }
 
 const CACHE_TTL_SECONDS = 5 * 60; // 5 minutes
+
+const MAX_INSIGHTS_ACCOUNTS =
+  Number.parseInt(process.env.MAX_INSIGHTS_ACCOUNTS || "20") || 20;
+const MAX_INSIGHTS_RANGE_DAYS =
+  Number.parseInt(process.env.MAX_INSIGHTS_RANGE_DAYS || "31") || 31;
+const ADS_INSIGHTS_CONCURRENCY =
+  Number.parseInt(process.env.ADS_INSIGHTS_CONCURRENCY || "4") || 4;
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -38,6 +46,24 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Missing date range" }, { status: 400 });
   }
 
+  // Guard: limit maximum date span to avoid extremely heavy requests
+  try {
+    const fromDate = new Date(query.from);
+    const toDate = new Date(query.to);
+    const diffMs = toDate.getTime() - fromDate.getTime();
+    const diffDays = diffMs > 0 ? diffMs / (24 * 60 * 60 * 1000) : 0;
+    if (diffDays > MAX_INSIGHTS_RANGE_DAYS) {
+      return NextResponse.json(
+        {
+          error: `Date range too large. Please select at most ${MAX_INSIGHTS_RANGE_DAYS} days.`,
+        },
+        { status: 400 }
+      );
+    }
+  } catch {
+    // ถ้าพาร์สไม่ได้ ปล่อยให้ไป error จาก Meta แทน
+  }
+
   // Only use ad accounts that are active in Manager Accounts
   const managerAccounts = await prisma.managerAccount.findMany({
     where: { userId: session.user.id, isActive: true },
@@ -47,6 +73,14 @@ export async function GET(req: Request) {
   if (!managerAccounts.length) {
     return NextResponse.json({ ads: [] });
   }
+
+  if (managerAccounts.length > MAX_INSIGHTS_ACCOUNTS) {
+    console.warn(
+      `[AdsInsights] Too many manager accounts (${managerAccounts.length}). Limiting to first ${MAX_INSIGHTS_ACCOUNTS}.`
+    );
+  }
+
+  const limitedAccounts = managerAccounts.slice(0, MAX_INSIGHTS_ACCOUNTS);
 
   const cacheKey = `ads_${session.user.id}_${query.from}_${query.to}_${query.search || "none"}`;
 
@@ -59,9 +93,11 @@ export async function GET(req: Request) {
   const timeRange = JSON.stringify({ since: query.from, until: query.to });
   const allAds: any[] = [];
 
-  // Parallel fetch across all active ad accounts
-  await Promise.all(
-    managerAccounts.map(async (acc) => {
+  // Parallel fetch across active ad accounts with concurrency limit
+  await runWithConcurrency(
+    limitedAccounts,
+    ADS_INSIGHTS_CONCURRENCY,
+    async (acc) => {
       try {
         const accountPath = acc.accountId.startsWith("act_")
           ? acc.accountId
@@ -108,7 +144,8 @@ export async function GET(req: Request) {
       } catch (err) {
         console.error("FB ads batch fetch error for account", acc.accountId, err);
       }
-    })
+      return null;
+    }
   );
 
   // --- Page name lookup: DB first, Facebook API as fallback ---
@@ -296,7 +333,17 @@ export async function GET(req: Request) {
 
       const storyId = creative?.effective_object_story_id || creative?.object_story_id;
       const adPostUrl = storyId ? `https://facebook.com/${storyId}` : null;
-      const adsManagerUrl = `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${ad.account_id}`;
+      // พยายามสร้างลิงก์ให้ชี้ไปยังบัญชีโฆษณาที่ถูกต้องใน Ads Manager
+      const rawAccountId = String(ad.account_id ?? "");
+      const numericAccountId = rawAccountId.startsWith("act_")
+        ? rawAccountId.slice(4)
+        : rawAccountId;
+      // ใช้ account id เดียวกันเป็นทั้ง global_scope_id / business_id / act
+      const adsManagerUrl =
+        `https://adsmanager.facebook.com/adsmanager/manage/campaigns` +
+        `?global_scope_id=${numericAccountId}` +
+        `&business_id=${numericAccountId}` +
+        `&act=${numericAccountId}`;
 
       return {
         id: ad.ad_id as string,
@@ -329,7 +376,11 @@ export async function GET(req: Request) {
   const responseData = { ads: normalized };
 
   // Store in cache (Redis if configured, else in-memory)
-  await cacheSet(cacheKey, responseData, CACHE_TTL_SECONDS);
+  try {
+    await cacheSet(cacheKey, responseData, CACHE_TTL_SECONDS);
+  } catch (err) {
+    console.warn("[AdsInsights] Failed to write cache:", err);
+  }
 
   return NextResponse.json(responseData);
 }

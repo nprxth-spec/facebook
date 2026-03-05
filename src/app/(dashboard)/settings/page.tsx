@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,12 +10,39 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
-  User, Link2, Users, CreditCard, Palette, Trash2, CheckCircle2, Plus, X,
-  Shield, Globe, Clock, Sun, Moon, Monitor, AlertTriangle, Check, Loader2,
+  User,
+  Link2,
+  Users,
+  CreditCard,
+  Palette,
+  Trash2,
+  CheckCircle2,
+  Plus,
+  X,
+  Shield,
+  Globe,
+  Clock,
+  Sun,
+  Moon,
+  Monitor,
+  AlertTriangle,
+  Check,
+  Loader2,
+  ReceiptText,
+  Sparkles,
+  Download,
 } from "lucide-react";
+import { AddCardDialog } from "@/components/billing/AddCardDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -128,7 +156,163 @@ function SettingsContent() {
   const [timezone, setTimezone] = useState(globalTimezone);
   const [prefsSaving, setPrefsSaving] = useState(false);
 
+  // Billing overview (Stripe)
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingOverview, setBillingOverview] = useState<{
+    customer: { id: string; email: string | null; defaultPaymentMethodId: string | null };
+    paymentMethods: { id: string; brand: string | null; last4: string | null; expMonth: number | null; expYear: number | null; name: string | null }[];
+    invoices: { id: string; number: string | null; status: string | null; created: number; total: number; currency: string | null; hostedInvoiceUrl: string | null; invoicePdf: string | null }[];
+    subscriptions: {
+      id: string;
+      status: string | null;
+      currentPeriodEnd: number;
+      cancelAtPeriodEnd: boolean;
+      planId: string | null;
+      items: {
+        id: string;
+        priceId: string;
+        productId: string | null;
+        unitAmount: number | null;
+        currency: string | null;
+        nickname: string | null;
+      }[];
+    }[];
+  } | null>(null);
+  const [addCardOpen, setAddCardOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("business");
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
+  const [upgradeSubmitting, setUpgradeSubmitting] = useState(false);
+  const [cancelPlanOpen, setCancelPlanOpen] = useState(false);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+
   const isThai = language === "th";
+
+  const billingPlans = [
+    {
+      id: "free",
+      nameTh: "ฟรี",
+      nameEn: "Free",
+      priceLabelTh: "$0 / 14 วันแรก",
+      priceLabelEn: "$0 / first 14 days",
+      descriptionTh: "ทดลองใช้งาน Centxo ฟรี 14 วัน พร้อมข้อจำกัดที่เหมาะสำหรับเริ่มต้น",
+      descriptionEn: "Try Centxo free for 14 days with starter limits.",
+      priceIdEnvKey: null,
+      featuresTh: [
+        "ทดลองใช้ฟรี 14 วัน",
+        "เชื่อมได้ 5 บัญชีโฆษณา · 10 เพจ",
+        "ส่งออก /export ได้สูงสุด 100 แถวต่อครั้ง (ไม่มี Auto export)",
+        "ส่งออก /export-ads ได้ 50 แถวต่อครั้ง",
+        "ใช้ Tools ได้ทุกฟีเจอร์ ยกเว้น AI หาไอเดียกลุ่มเป้าหมาย (มีเครดิต AI จำกัด)",
+        "สร้างโฆษณาอัตโนมัติได้ 20 ครั้ง",
+      ],
+      featuresEn: [
+        "Free 14-day trial",
+        "Up to 5 ad accounts · 10 pages",
+        "Manual /export up to 100 rows per run (no Auto export)",
+        "/export-ads up to 50 rows per run",
+        "Access all Tools except AI audience ideas (with limited AI credits)",
+        "Create auto campaigns up to 20 times",
+      ],
+      highlight: false,
+    },
+    {
+      id: "pro",
+      nameTh: "Pro",
+      nameEn: "Pro",
+      priceLabelTh: "$19 / เดือน",
+      priceLabelEn: "$19 / month",
+      descriptionTh: "เหมาะสำหรับฟรีแลนซ์หรือธุรกิจขนาดเล็กที่ต้องส่งออกรายงานเป็นประจำ",
+      descriptionEn: "Perfect for freelancers or small teams exporting reports regularly.",
+      priceIdEnvKey: "STRIPE_PRICE_PRO",
+      featuresTh: [
+        "เชื่อมได้ 10 บัญชีโฆษณา · 20 เพจ",
+        "ส่งออก /export ได้สูงสุด 500 แถวต่อครั้ง และใช้ Auto export ได้",
+        "ส่งออก /export-ads ได้ 200 แถวต่อครั้ง",
+        "ใช้ Tools ได้ทุกฟีเจอร์ (ยกเว้น AI หาไอเดียกลุ่มเป้าหมายมีเครดิต AI ต่อเดือน)",
+        "สร้างโฆษณาอัตโนมัติได้ 50 ครั้งต่อเดือน",
+      ],
+      featuresEn: [
+        "Up to 10 ad accounts · 20 pages",
+        "Manual /export up to 500 rows per run + Auto export enabled",
+        "/export-ads up to 200 rows per run",
+        "All Tools enabled (AI audience ideas with monthly AI credits)",
+        "Create auto campaigns up to 50 times per month",
+      ],
+      highlight: false,
+    },
+    {
+      id: "business",
+      nameTh: "Business",
+      nameEn: "Business",
+      priceLabelTh: "$39 / เดือน",
+      priceLabelEn: "$39 / month",
+      descriptionTh: "สำหรับเอเจนซีหรือทีมที่ต้องการใช้ทุกฟีเจอร์แบบจัดเต็ม",
+      descriptionEn: "For agencies and teams that need full, high-volume access.",
+      priceIdEnvKey: "STRIPE_PRICE_BUSINESS",
+      featuresTh: [
+        "บัญชีโฆษณา · เพจ · การส่งออก ไม่จำกัดตามการใช้งานปกติ",
+        "ส่งออก /export และ /export-ads ได้ไม่จำกัดตามการใช้งานจริง",
+        "ใช้ Auto export และทุก Tools รวมถึง AI หาไอเดียกลุ่มเป้าหมาย (เครดิตสูงต่อเดือน)",
+        "สร้างโฆษณาอัตโนมัติได้ไม่จำกัดตามการใช้งานปกติ",
+      ],
+      featuresEn: [
+        "Ad accounts, pages, and exports effectively unlimited for normal use",
+        "No practical limit on /export and /export-ads for real-world workloads",
+        "Full access to Auto export and all Tools including AI audience ideas (high monthly credits)",
+        "Create auto campaigns without practical limits for normal use",
+      ],
+      highlight: true,
+    },
+  ];
+
+  const formatDate = useCallback(
+    (seconds?: number | null) => {
+      if (!seconds) return "–";
+      try {
+        return new Intl.DateTimeFormat(isThai ? "th-TH" : "en-US", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          timeZone: "Asia/Bangkok",
+        }).format(new Date(seconds * 1000));
+      } catch {
+        return new Date(seconds * 1000).toISOString().slice(0, 10);
+      }
+    },
+    [isThai],
+  );
+
+  const currentPlan = useMemo(() => {
+    if (!billingOverview || !billingOverview.subscriptions?.length) return null;
+    const active = billingOverview.subscriptions.find((sub) =>
+      ["active", "trialing", "past_due"].includes((sub.status ?? "").toLowerCase()),
+    );
+    if (!active) return null;
+    const firstItem = active.items[0];
+    if (!firstItem) return null;
+    return {
+      status: active.status,
+      nickname: firstItem.nickname,
+      amount: firstItem.unitAmount,
+      currency: firstItem.currency,
+      currentPeriodEnd: active.currentPeriodEnd,
+      cancelAtPeriodEnd: active.cancelAtPeriodEnd,
+      planId: active.planId,
+    };
+  }, [billingOverview]);
+
+  const currentPlanDisplayName = useMemo(() => {
+    if (!currentPlan) return isThai ? "ฟรี" : "Free";
+    const planDef = currentPlan.planId
+      ? billingPlans.find((p) => p.id === currentPlan.planId)
+      : undefined;
+    if (planDef) {
+      return isThai ? planDef.nameTh : planDef.nameEn;
+    }
+    if (currentPlan.nickname) return currentPlan.nickname;
+    return isThai ? "แพ็กเกจแบบชำระเงิน" : "Paid plan";
+  }, [currentPlan, isThai]);
 
   // Sync with global state when it changes (e.g. on initial load)
   useEffect(() => {
@@ -153,6 +337,64 @@ function SettingsContent() {
       setTimezone(globalTimezone);
     }
   }, [globalTheme, globalAccent, globalLanguage, globalTimezone]);
+
+  // helper to load billing overview
+  const loadBillingOverview = useCallback(async () => {
+    setBillingLoading(true);
+    try {
+      const res = await fetch("/api/billing/overview");
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Failed to load billing overview");
+      }
+      setBillingOverview(data);
+    } catch (e) {
+      console.error(e);
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : isThai
+            ? "โหลดข้อมูล Billing ไม่สำเร็จ"
+            : "Failed to load billing overview",
+      );
+    } finally {
+      setBillingLoading(false);
+    }
+  }, [isThai]);
+
+  // Load billing overview when billing tab is active
+  useEffect(() => {
+    if (activeTab !== "billing") return;
+    loadBillingOverview();
+  }, [activeTab, loadBillingOverview]);
+
+  // Load billing overview when billing tab is active
+  useEffect(() => {
+    if (activeTab !== "billing") return;
+
+    (async () => {
+      setBillingLoading(true);
+      try {
+        const res = await fetch("/api/billing/overview");
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || "Failed to load billing overview");
+        }
+        setBillingOverview(data);
+      } catch (e) {
+        console.error(e);
+        toast.error(
+          e instanceof Error
+            ? e.message
+            : isThai
+              ? "โหลดข้อมูล Billing ไม่สำเร็จ"
+              : "Failed to load billing overview",
+        );
+      } finally {
+        setBillingLoading(false);
+      }
+    })();
+  }, [activeTab, isThai]);
 
   // Manager accounts
   const [accounts, setAccounts] = useState<ManagerAccount[]>([]);
@@ -608,25 +850,6 @@ function SettingsContent() {
     { id: "preferences", label: isThai ? "การแสดงผล" : "Display", icon: Palette },
   ];
 
-  const billingPlans = [
-    {
-      name: "Pro",
-      price: "฿499",
-      features: isThai
-        ? ["ส่งออกไม่จำกัด", "10 บัญชีโฆษณา", "ส่งออกอัตโนมัติ", "Priority Support"]
-        : ["Unlimited exports", "10 ad accounts", "Automated exports", "Priority support"],
-      highlight: false,
-    },
-    {
-      name: "Business",
-      price: "฿1,299",
-      features: isThai
-        ? ["ทุกอย่างใน Pro", "ไม่จำกัดบัญชีโฆษณา", "API Access", "Dedicated Support"]
-        : ["Everything in Pro", "Unlimited ad accounts", "API access", "Dedicated support"],
-      highlight: true,
-    },
-  ];
-
   const themeOptions = [
     { id: "light", labelTh: "สว่าง", labelEn: "Light", icon: Sun },
     { id: "dark", labelTh: "มืด", labelEn: "Dark", icon: Moon },
@@ -669,7 +892,7 @@ function SettingsContent() {
   };
 
   return (
-    <div className="mx-auto max-w-[1400px] flex flex-col gap-6 py-8">
+    <div className="mx-auto max-w-[1200px] flex flex-col gap-6 py-8 px-4 sm:px-6 lg:px-10">
       <Card className="shadow-sm min-h-[calc(100vh-8rem)] max-h-[calc(100vh-8rem)] flex flex-col overflow-hidden">
         <CardHeader className="pb-4 shrink-0">
           <CardTitle className="text-2xl">
@@ -1170,67 +1393,927 @@ function SettingsContent() {
                       {isThai ? "ตั้งค่าการชำระเงิน" : "Billing settings"}
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {isThai ? "จัดการแผนบริการ" : "Manage your subscription plan."}
+                      {isThai
+                        ? "จัดการแพ็กเกจ ระบบตัดบัตร และดูประวัติบิลผ่าน Stripe"
+                        : "Manage your plan, cards and invoices via Stripe."}
                     </p>
                   </div>
-                  <div className="p-4 rounded-xl bg-gradient-to-r from-primary to-indigo-600 text-white">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm opacity-80">
-                          {isThai ? "แผนปัจจุบัน" : "Current plan"}
-                        </p>
-                        <p className="text-xl font-bold mt-0.5">
-                          {isThai ? "ฟรี" : "Free"}
-                        </p>
-                        <p className="text-sm opacity-80 mt-1">
-                          {isThai
-                            ? "ส่งออกได้ 100 แถว/เดือน"
-                            : "Export up to 100 rows per month"}
-                        </p>
-                      </div>
-                      <CreditCard className="w-10 h-10 opacity-40" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {billingPlans.map((plan) => (
-                      <div
-                        key={plan.name}
-                        className={cn(
-                          "p-4 rounded-xl border-2 space-y-3",
-                          plan.highlight
-                            ? "border-primary bg-primary/10 dark:bg-primary/10"
-                            : "border-gray-200 dark:border-gray-700"
-                        )}
+
+                  <Tabs defaultValue="plan" className="mt-4">
+                    <TabsList className="flex gap-4 w-auto h-auto bg-transparent p-0 rounded-none justify-start border-b border-gray-200 dark:border-gray-800">
+                      <TabsTrigger
+                        value="plan"
+                        className="w-28 text-sm px-0 pb-1 rounded-none bg-transparent border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary font-medium justify-center"
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-gray-900 dark:text-gray-100">
-                              {plan.name}
-                            </span>
-                            {plan.highlight && (
-                              <Badge className="text-xs">
-                                {isThai ? "แนะนำ" : "Recommended"}
-                              </Badge>
+                        {isThai ? "แผนปัจจุบัน" : "Current plan"}
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="methods"
+                        className="w-28 text-sm px-0 pb-1 rounded-none bg-transparent border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary font-medium justify-center"
+                      >
+                        {isThai ? "วิธีการชำระเงิน" : "Payment methods"}
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="invoices"
+                        className="w-28 text-sm px-0 pb-1 rounded-none bg-transparent border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary font-medium justify-center"
+                      >
+                        {isThai ? "ประวัติการชำระเงิน" : "Payment history"}
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="auto-renew"
+                        className="w-32 text-sm px-0 pb-1 rounded-none bg-transparent border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary font-medium justify-center"
+                      >
+                        {isThai ? "การต่ออายุอัตโนมัติ" : "Auto-renew"}
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="cancel"
+                        className="w-32 text-sm px-0 pb-1 rounded-none bg-transparent border-b-2 border-transparent data-[state=active]:border-red-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-red-600 dark:data-[state=active]:text-red-400 font-medium justify-center"
+                      >
+                        {isThai ? "ยกเลิกแพ็กเกจ" : "Cancel plan"}
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="plan" className="mt-3 space-y-4">
+                      <div className="p-4 rounded-xl bg-gradient-to-r from-primary to-indigo-600 text-white flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                          <p className="text-sm opacity-80">
+                            {isThai ? "แผนปัจจุบัน" : "Current plan"}
+                          </p>
+                          <p className="text-xl font-bold mt-0.5">
+                            {currentPlan ? currentPlanDisplayName : isThai ? "ฟรี" : "Free"}
+                          </p>
+                          <p className="text-sm opacity-80 mt-1">
+                            {currentPlan ? (
+                              isThai ? (
+                                <>ตัดบัตรอัตโนมัติทุกเดือนผ่าน Stripe</>
+                              ) : (
+                                <>Billed automatically every month via Stripe.</>
+                              )
+                            ) : isThai ? (
+                              <>ส่งออกได้ 100 แถว/เดือน — อัปเกรดเป็น Pro เพื่อปลดล็อกไม่จำกัด</>
+                            ) : (
+                              <>Export up to 100 rows/month — upgrade to Pro for unlimited usage.</>
                             )}
-                          </div>
-                          <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                            {plan.price}
-                            <span className="text-sm font-normal text-gray-500">
-                              {isThai ? "/เดือน" : "/month"}
-                            </span>
-                          </span>
+                          </p>
                         </div>
-                        <ul className="space-y-1.5 text-sm text-gray-600 dark:text-gray-400">
-                          {plan.features.map((f) => (
-                            <li key={f} className="flex items-center gap-2">
-                              <Check className="w-3.5 h-3.5 text-green-500" />
-                              {f}
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="flex flex-col items-end gap-2">
+                          <CreditCard className="w-10 h-10 opacity-40" />
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="bg-white text-primary hover:bg-slate-100"
+                            onClick={() => setUpgradeOpen(true)}
+                          >
+                            {isThai ? "อัปเกรดแพ็กเกจ" : "Upgrade plan"}
+                          </Button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+
+                      {currentPlan && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white/70 dark:bg-gray-900/40">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {isThai ? "สถานะแพ็กเกจ" : "Plan status"}
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                              {isThai
+                                ? currentPlan.status === "active"
+                                  ? "ใช้งานอยู่"
+                                  : currentPlan.status === "trialing"
+                                    ? "กำลังทดลองใช้"
+                                    : "สถานะอื่นๆ"
+                                : currentPlan.status}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white/70 dark:bg-gray-900/40">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {isThai ? "ต่ออายุรอบถัดไป" : "Renews on"}
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                              {formatDate(currentPlan.currentPeriodEnd)}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-3 bg-white/70 dark:bg-gray-900/40">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {isThai ? "ราคา/เดือน" : "Price / month"}
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                              {currentPlan.amount
+                                ? `${(currentPlan.amount / 100).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })} ${currentPlan.currency?.toUpperCase() ?? ""}`
+                                : isThai
+                                  ? "–"
+                                  : "–"}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="methods" className="mt-3">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                            <CreditCard className="w-4 h-4 text-primary" />
+                            {isThai ? "วิธีการชำระเงิน" : "Payment methods"}
+                          </h3>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-9 px-3 text-sm"
+                            onClick={() => setAddCardOpen(true)}
+                          >
+                            {isThai ? "เพิ่มบัตร" : "Add card"}
+                          </Button>
+                        </div>
+
+                        <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+                          {billingLoading ? (
+                            <div className="flex items-center justify-center py-8">
+                              <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                            </div>
+                          ) : !billingOverview || billingOverview.paymentMethods.length === 0 ? (
+                            <div className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                              {isThai
+                                ? "ยังไม่มีบัตรที่บันทึกไว้"
+                                : "No saved payment methods yet."}
+                            </div>
+                          ) : (
+                            <table className="w-full text-sm">
+                              <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs text-gray-500 dark:text-gray-400">
+                                <tr>
+                                  <th className="px-4 py-2 text-left">{isThai ? "บัตร" : "Card"}</th>
+                                  <th className="pl-2 pr-4 py-2 text-left">{isThai ? "หมดอายุ" : "Expires"}</th>
+                                  <th className="px-4 py-2 text-center">{isThai ? "ค่าเริ่มต้น" : "Default"}</th>
+                                  <th className="px-4 py-2 text-center">{isThai ? "จัดการ" : "Actions"}</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {billingOverview.paymentMethods.map((pm) => {
+                                  const isDefault =
+                                    billingOverview.customer.defaultPaymentMethodId === pm.id;
+                                  const brand = (pm.brand ?? "card").toLowerCase();
+                                  const isVisa = brand === "visa";
+                                  const isMastercard =
+                                    brand === "mastercard" || brand === "master card" || brand === "mc";
+                                  const displayBrand = isVisa
+                                    ? "Visa"
+                                    : isMastercard
+                                      ? "Mastercard"
+                                      : (pm.brand ?? "Card");
+                                  const masked =
+                                    pm.last4 && pm.last4.length === 4
+                                      ? `•••• •••• •••• ${pm.last4}`
+                                      : "•••• •••• •••• ••••";
+
+                                  return (
+                                    <tr
+                                      key={pm.id}
+                                      className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
+                                    >
+                                      <td className="px-4 py-2">
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex items-center justify-center w-9 h-5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 overflow-hidden">
+                                            {isVisa ? (
+                                              <Image
+                                                src="/visa.svg"
+                                                alt="Visa"
+                                                width={32}
+                                                height={20}
+                                                className="w-full h-full object-cover"
+                                              />
+                                            ) : isMastercard ? (
+                                              <Image
+                                                src="/mastercard.svg"
+                                                alt="Mastercard"
+                                                width={32}
+                                                height={20}
+                                                className="w-full h-full object-cover"
+                                              />
+                                            ) : (
+                                              <div className="w-full h-full bg-gradient-to-r from-gray-200 to-gray-300 dark:from-gray-600 dark:to-gray-700 flex items-center justify-center text-[8px] font-semibold text-gray-700 dark:text-gray-100">
+                                                {displayBrand[0]}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="flex flex-col">
+                                            <span className="text-xs font-medium text-gray-900 dark:text-gray-100">
+                                              {displayBrand}
+                                            </span>
+                                            <span className="text-xs text-gray-600 dark:text-gray-300 font-mono tracking-wide">
+                                              {masked}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      </td>
+                                      <td className="pl-2 pr-4 py-2 text-xs text-gray-600 dark:text-gray-300">
+                                        {pm.expMonth && pm.expYear
+                                          ? `${pm.expMonth.toString().padStart(2, "0")}/${pm.expYear
+                                              .toString()
+                                              .slice(-2)}`
+                                          : "—"}
+                                      </td>
+                                      <td className="px-4 py-2 text-center text-sm">
+                                        {isDefault ? (
+                                          <Badge variant="success" className="text-[12px] px-2 py-0 font-normal">
+                                            {isThai ? "ใช้งานอยู่" : "Default"}
+                                          </Badge>
+                                        ) : (
+                                          <Badge
+                                            variant="secondary"
+                                            className="text-[12px] px-2 py-0 font-normal"
+                                          >
+                                            {isThai ? "สำรอง" : "Secondary"}
+                                          </Badge>
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2 text-center">
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <Button
+                                              size="icon"
+                                              variant="outline"
+                                              className="h-7 w-7 text-xs"
+                                            >
+                                              ...
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end" className="w-40 text-xs">
+                                            <DropdownMenuItem
+                                              disabled={isDefault}
+                                              onClick={async () => {
+                                                try {
+                                                  const res = await fetch(
+                                                    "/api/billing/payment-methods/default",
+                                                    {
+                                                      method: "POST",
+                                                      headers: {
+                                                        "Content-Type": "application/json",
+                                                      },
+                                                      body: JSON.stringify({
+                                                        paymentMethodId: pm.id,
+                                                      }),
+                                                    },
+                                                  );
+                                                  const data = await res.json();
+                                                  if (!res.ok || data.error) {
+                                                    throw new Error(
+                                                      data.error ||
+                                                        "Failed to update default payment method",
+                                                    );
+                                                  }
+                                                  toast.success(
+                                                    isThai
+                                                      ? "ตั้งเป็นบัตรหลักเรียบร้อย"
+                                                      : "Default card updated",
+                                                  );
+                                                  await loadBillingOverview();
+                                                } catch (e) {
+                                                  toast.error(
+                                                    e instanceof Error
+                                                      ? e.message
+                                                      : isThai
+                                                        ? "ตั้งบัตรหลักไม่สำเร็จ"
+                                                        : "Failed to update default card",
+                                                  );
+                                                }
+                                              }}
+                                            >
+                                              {isThai ? "ตั้งเป็นบัตรหลัก" : "Set as default"}
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                              disabled={isDefault}
+                                              onClick={async () => {
+                                                if (
+                                                  !window.confirm(
+                                                    isThai
+                                                      ? "ต้องการลบบัตรใบนี้หรือไม่?"
+                                                      : "Remove this card?",
+                                                  )
+                                                ) {
+                                                  return;
+                                                }
+                                                try {
+                                                  const res = await fetch(
+                                                    `/api/billing/payment-methods/${pm.id}`,
+                                                    { method: "DELETE" },
+                                                  );
+                                                  const data = await res.json();
+                                                  if (!res.ok || data.error) {
+                                                    throw new Error(
+                                                      data.error ||
+                                                        "Failed to remove payment method",
+                                                    );
+                                                  }
+                                                  toast.success(
+                                                    isThai
+                                                      ? "ลบบัตรเรียบร้อย"
+                                                      : "Card removed successfully",
+                                                  );
+                                                  await loadBillingOverview();
+                                                } catch (e) {
+                                                  toast.error(
+                                                    e instanceof Error
+                                                      ? e.message
+                                                      : isThai
+                                                        ? "ลบบัตรไม่สำเร็จ"
+                                                        : "Failed to remove card",
+                                                  );
+                                                }
+                                              }}
+                                            >
+                                              {isThai ? "ลบบัตรนี้" : "Remove card"}
+                                            </DropdownMenuItem>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="invoices" className="mt-3">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                            <ReceiptText className="w-4 h-4 text-primary" />
+                            {isThai ? "ประวัติการชำระเงิน" : "Payment history"}
+                          </h3>
+                        </div>
+                        <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+                          {billingLoading ? (
+                            <div className="flex items-center justify-center py-8">
+                              <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                            </div>
+                          ) : !billingOverview || billingOverview.invoices.length === 0 ? (
+                            <div className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                              {isThai ? "ยังไม่มีบิล" : "No invoices yet."}
+                            </div>
+                          ) : (
+                            <table className="w-full text-sm">
+                              <thead className="bg-gray-50 dark:bg-gray-800/60 text-xs text-gray-500 dark:text-gray-400">
+                                <tr>
+                                  <th className="px-3 py-2 text-left">
+                                    {isThai ? "เลขบิล" : "Invoice"}
+                                  </th>
+                                  <th className="px-3 py-2 text-left">
+                                    {isThai ? "วันที่" : "Date"}
+                                  </th>
+                                  <th className="px-3 py-2 text-right">
+                                    {isThai ? "ยอดรวม" : "Total"}
+                                  </th>
+                                  <th className="px-3 py-2 text-center">
+                                    {isThai ? "สถานะ" : "Status"}
+                                  </th>
+                                  <th className="px-3 py-2 text-center">
+                                    {isThai ? "ดาวน์โหลด" : "Download"}
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {billingOverview.invoices.map((inv) => {
+                                  const amount = (inv.total ?? 0) / 100;
+                                  return (
+                                    <tr
+                                      key={inv.id}
+                                      className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-colors"
+                                    >
+                                      <td className="px-3 py-1.5 font-mono text-sm text-gray-700 dark:text-gray-200">
+                                        {inv.number ?? inv.id}
+                                      </td>
+                                  <td className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300">
+                                        {formatDate(inv.created)}
+                                      </td>
+                                      <td className="px-3 py-1.5 text-sm text-right text-gray-900 dark:text-gray-100">
+                                        {amount.toLocaleString(undefined, {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        })}{" "}
+                                        {inv.currency?.toUpperCase() ?? ""}
+                                      </td>
+                                      <td className="px-3 py-1.5 text-center text-sm">
+                                        {inv.status === "paid" ? (
+                                          <Badge
+                                            variant="success"
+                                            className="text-[12px] px-2 py-0 align-middle font-normal"
+                                          >
+                                            {isThai ? "ชำระแล้ว" : "Paid"}
+                                          </Badge>
+                                        ) : (
+                                          <Badge
+                                            variant="secondary"
+                                            className="text-[12px] px-2 py-0 align-middle font-normal"
+                                          >
+                                            {inv.status ?? "open"}
+                                          </Badge>
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-1.5 text-center">
+                                        {inv.invoicePdf || inv.hostedInvoiceUrl ? (
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-7 px-2 text-xs"
+                                            onClick={() => {
+                                              const url = inv.invoicePdf ?? inv.hostedInvoiceUrl!;
+                                              window.open(url, "_blank");
+                                            }}
+                                          >
+                                            <Download className="w-3.5 h-3.5" />
+                                          </Button>
+                                        ) : (
+                                          <span className="text-[11px] text-gray-400">—</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="auto-renew" className="mt-3">
+                      <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-primary" />
+                              {isThai ? "การต่ออายุอัตโนมัติของแพ็กเกจ" : "Plan auto-renew settings"}
+                            </h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {isThai
+                                ? "เลือกว่าจะให้ระบบตัดบัตรต่ออายุแพ็กเกจให้อัตโนมัติเมื่อถึงรอบถัดไปหรือไม่"
+                                : "Choose whether your plan should auto-renew at the end of each billing period."}
+                            </p>
+                          </div>
+                        </div>
+                        {!currentPlan ? (
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            {isThai
+                              ? "ขณะนี้คุณยังไม่มีแพ็กเกจแบบชำระเงิน แผนปัจจุบันคือแผนฟรี"
+                              : "You don't have an active paid subscription; you're currently on the free plan."}
+                          </p>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                  {currentPlan.nickname ??
+                                    (isThai ? "แพ็กเกจแบบชำระเงิน" : "Paid plan")}
+                                </p>
+                                {currentPlan.currentPeriodEnd != null && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-1">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    {isThai
+                                      ? `รอบปัจจุบันสิ้นสุดวันที่ ${formatDate(
+                                          currentPlan.currentPeriodEnd,
+                                        )}`
+                                      : `Current period ends on ${formatDate(
+                                          currentPlan.currentPeriodEnd,
+                                        )}`}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs text-gray-600 dark:text-gray-300">
+                                  {isThai ? "ต่ออายุอัตโนมัติ" : "Auto-renew"}
+                                </span>
+                                <Switch
+                                  checked={!currentPlan.cancelAtPeriodEnd}
+                                  disabled={billingLoading}
+                                  onCheckedChange={async (value) => {
+                                    try {
+                                      const res = await fetch("/api/billing/auto-renew", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ enabled: value }),
+                                      });
+                                      const data = await res.json();
+                                      if (!res.ok || data.error) {
+                                        throw new Error(
+                                          data.error || "Failed to update auto-renew",
+                                        );
+                                      }
+                                      toast.success(
+                                        value
+                                          ? isThai
+                                            ? "เปิดการต่ออายุอัตโนมัติแล้ว"
+                                            : "Auto-renew enabled"
+                                          : isThai
+                                          ? "ปิดการต่ออายุอัตโนมัติแล้ว"
+                                          : "Auto-renew disabled",
+                                      );
+                                      await loadBillingOverview();
+                                    } catch (e) {
+                                      toast.error(
+                                        e instanceof Error
+                                          ? e.message
+                                          : isThai
+                                            ? "อัปเดตการต่ออายุอัตโนมัติไม่สำเร็จ"
+                                            : "Failed to update auto-renew",
+                                      );
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                              {(!currentPlan.cancelAtPeriodEnd
+                                ? isThai
+                                  ? "เมื่อเปิดไว้ ระบบจะตัดบัตรหลักของคุณโดยอัตโนมัติเมื่อถึงรอบถัดไป"
+                                  : "When enabled, your default card will be charged automatically on each renewal."
+                                : isThai
+                                  ? "เมื่อปิดไว้ แพ็กเกจจะไม่ต่ออายุอัตโนมัติ และจะหมดอายุเมื่อสิ้นสุดรอบปัจจุบัน"
+                                  : "When disabled, your plan will not renew and will end at the end of the current period."
+                              )}
+                            </p>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                              {isThai
+                                ? "หมายเหตุ: การตั้งค่านี้มีผลกับ subscription ปัจจุบันทั้งหมดของคุณ"
+                                : "Note: This setting applies to all of your current subscriptions."}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="cancel" className="mt-3">
+                      <div className="border border-red-200 dark:border-red-900/60 rounded-xl p-4 bg-red-50/60 dark:bg-red-900/20 space-y-3">
+                        <div>
+                          <h3 className="text-sm font-semibold text-red-700 dark:text-red-300">
+                            {isThai ? "ยกเลิกแพ็กเกจแบบชำระเงิน" : "Cancel paid plan"}
+                          </h3>
+                          <p className="mt-1 text-xs text-red-700/80 dark:text-red-200/80">
+                            {isThai
+                              ? "ระบบจะยกเลิกการต่ออายุอัตโนมัติของทุกแพ็กเกจ และคุณจะยังใช้งานได้จนจบรอบบิลปัจจุบัน"
+                              : "We’ll turn off auto-renew for all subscriptions. You can keep using your plan until the end of the current billing period."}
+                          </p>
+                        </div>
+
+                        {!currentPlan ? (
+                          <p className="text-xs text-gray-600 dark:text-gray-300">
+                            {isThai
+                              ? "ขณะนี้คุณยังไม่มีแพ็กเกจแบบชำระเงิน แผนปัจจุบันคือแผนฟรี จึงไม่มีอะไรให้ยกเลิก"
+                              : "You don't have an active paid subscription; you're currently on the free plan, so there's nothing to cancel."}
+                          </p>
+                        ) : (
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="text-xs text-gray-700 dark:text-gray-200 space-y-1">
+                              <p>
+                                {isThai
+                                  ? "แพ็กเกจปัจจุบัน:"
+                                  : "Current plan:"}{" "}
+                                <span className="font-semibold">
+                                  {currentPlanDisplayName}
+                                </span>
+                              </p>
+                              <p>
+                                {isThai
+                                  ? "วันหมดอายุรอบบิลปัจจุบัน:"
+                                  : "Current period ends on:"}{" "}
+                                <span className="font-semibold">
+                                  {formatDate(currentPlan.currentPeriodEnd)}
+                                </span>
+                              </p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/40"
+                              onClick={() => setCancelPlanOpen(true)}
+                              disabled={billingLoading}
+                            >
+                              {isThai ? "ยืนยันการยกเลิกแพ็กเกจ" : "Confirm cancel plan"}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+
+                  <AddCardDialog
+                    open={addCardOpen}
+                    onOpenChange={setAddCardOpen}
+                    isThai={isThai}
+                    onCardAdded={loadBillingOverview}
+                  />
+
+                  {/* Cancel plan dialog */}
+                  <Dialog open={cancelPlanOpen} onOpenChange={setCancelPlanOpen}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle className="text-red-600 dark:text-red-400">
+                          {isThai ? "ยืนยันการยกเลิกแพ็กเกจ" : "Confirm plan cancellation"}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs sm:text-sm">
+                          {isThai ? (
+                            <>
+                              ระบบจะ{" "}
+                              <span className="font-semibold text-red-600 dark:text-red-300">
+                                ยกเลิกแพ็กเกจแบบชำระเงินทั้งหมดทันที
+                              </span>{" "}
+                              และจะไม่ตัดบัตรอีกต่อไป หากต้องการใช้งานต่อ คุณสามารถสมัครแพ็กเกจใหม่ได้ทุกเมื่อ
+                            </>
+                          ) : (
+                            <>
+                              We will{" "}
+                              <span className="font-semibold text-red-600 dark:text-red-300">
+                                immediately cancel all paid subscriptions
+                              </span>{" "}
+                              and stop all future charges. You can subscribe again at any time
+                              if you want to resume.
+                            </>
+                          )}
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <DialogFooter className="gap-2">
+                        <Button
+                          variant="outline"
+                          type="button"
+                          onClick={() => setCancelPlanOpen(false)}
+                          disabled={cancelSubmitting}
+                        >
+                          {isThai ? "ย้อนกลับ" : "Back"}
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          type="button"
+                          disabled={cancelSubmitting}
+                          onClick={async () => {
+                            setCancelSubmitting(true);
+                            try {
+                              const res = await fetch("/api/billing/cancel", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                              });
+                              const data = await res.json();
+                              if (!res.ok || data.error) {
+                                throw new Error(
+                                  data.error || "Failed to cancel subscription",
+                                );
+                              }
+                              toast.success(
+                                isThai
+                                  ? "ยกเลิกแพ็กเกจแบบชำระเงินเรียบร้อยแล้ว"
+                                  : "Paid plan cancelled successfully.",
+                              );
+                              setCancelPlanOpen(false);
+                              await loadBillingOverview();
+                            } catch (e) {
+                              toast.error(
+                                e instanceof Error
+                                  ? e.message
+                                  : isThai
+                                    ? "ยกเลิกแพ็กเกจไม่สำเร็จ"
+                                    : "Failed to cancel plan",
+                              );
+                            } finally {
+                              setCancelSubmitting(false);
+                            }
+                          }}
+                        >
+                          {cancelSubmitting
+                            ? isThai
+                              ? "กำลังยกเลิก..."
+                              : "Cancelling..."
+                            : isThai
+                              ? "ยืนยันการยกเลิกแพ็กเกจ"
+                              : "Confirm cancel plan"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* Upgrade dialog: เลือกแพ็กเกจ + บัตรที่ใช้ตัดเงิน */}
+                  <Dialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
+                    <DialogContent className="max-w-3xl">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-primary" />
+                          {isThai ? "อัปเกรดแพ็กเกจ" : "Upgrade your plan"}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs sm:text-sm">
+                          {isThai
+                            ? "เลือกแพ็กเกจที่ต้องการ และเลือกบัตรที่ใช้ตัดเงิน ระบบจะชำระผ่าน Stripe โดยอัตโนมัติ"
+                            : "Choose a plan and a saved card. We’ll charge it securely via Stripe."}
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                        {/* Plan selection */}
+                        <div className="space-y-3">
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                            {isThai ? "เลือกแพ็กเกจ" : "Choose a plan"}
+                          </p>
+                          <div className="space-y-3">
+                            {billingPlans.map((plan) => {
+                              const name = isThai ? plan.nameTh : plan.nameEn;
+                              const price = isThai ? plan.priceLabelTh : plan.priceLabelEn;
+                              const desc = isThai ? plan.descriptionTh : plan.descriptionEn;
+                              const features = isThai ? plan.featuresTh : plan.featuresEn;
+                              const selected = selectedPlanId === plan.id;
+                              return (
+                                <button
+                                  key={plan.id}
+                                  type="button"
+                                  onClick={() => setSelectedPlanId(plan.id)}
+                                  className={cn(
+                                    "w-full text-left border rounded-xl px-3 py-3 text-sm transition-all",
+                                    selected
+                                      ? "border-primary bg-primary/5 dark:bg-primary/20"
+                                      : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500",
+                                  )}
+                                >
+                                  <div className="flex items-center justify-between gap-2 mb-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                                        {name}
+                                      </span>
+                                      {plan.highlight && (
+                                        <Badge className="text-[10px] px-2 py-0">
+                                          {isThai ? "ยอดนิยม" : "Popular"}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                      {price}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                    {desc}
+                                  </p>
+                                  <ul className="space-y-1 text-xs text-gray-600 dark:text-gray-300">
+                                    {features.slice(0, 3).map((f) => (
+                                      <li key={f} className="flex items-center gap-1.5">
+                                        <Check className="w-3 h-3 text-green-500" />
+                                        <span>{f}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Payment method selection */}
+                        <div className="space-y-3">
+                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                            {isThai ? "เลือกบัตรที่ใช้ชำระ" : "Choose payment method"}
+                          </p>
+                          {billingLoading ? (
+                            <div className="flex items-center justify-center py-4">
+                              <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                            </div>
+                          ) : !billingOverview || billingOverview.paymentMethods.length === 0 ? (
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {isThai
+                                ? "ยังไม่มีบัตรในระบบ กรุณาเพิ่มบัตรก่อน"
+                                : "No cards available. Please add a card first."}
+                            </p>
+                          ) : (
+                            <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                              {billingOverview.paymentMethods.map((pm) => {
+                                const label = `${(pm.brand ?? "card").toUpperCase()} •••• ${
+                                  pm.last4 ?? "----"
+                                }`;
+                                const displayId = pm.id;
+                                const isSelected = selectedPaymentMethodId
+                                  ? selectedPaymentMethodId === displayId
+                                  : billingOverview.customer.defaultPaymentMethodId === displayId;
+                                return (
+                                  <button
+                                    key={pm.id}
+                                    type="button"
+                                    onClick={() => setSelectedPaymentMethodId(displayId)}
+                                    className={cn(
+                                      "w-full flex items-center justify-between rounded-lg border px-3 py-2 text-[11px] sm:text-xs transition-colors",
+                                      isSelected
+                                        ? "border-primary bg-primary/5 dark:bg-primary/20"
+                                        : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500",
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        className={cn(
+                                          "flex items-center justify-center w-4 h-4 rounded-full border",
+                                          isSelected
+                                            ? "border-primary bg-primary/10"
+                                            : "border-gray-300 bg-transparent",
+                                        )}
+                                      >
+                                        <span
+                                          className={cn(
+                                            "w-2 h-2 rounded-full",
+                                            isSelected ? "bg-primary" : "bg-transparent",
+                                          )}
+                                        />
+                                      </span>
+                                      <span className="text-gray-800 dark:text-gray-100">
+                                        {label}
+                                      </span>
+                                    </div>
+                                    <span className="text-gray-500 dark:text-gray-300">
+                                      {pm.expMonth && pm.expYear
+                                        ? `${pm.expMonth.toString().padStart(2, "0")}/${pm.expYear
+                                            .toString()
+                                            .slice(-2)}`
+                                        : ""}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <DialogFooter className="mt-4">
+                        <Button
+                          variant="outline"
+                          onClick={() => setUpgradeOpen(false)}
+                          disabled={upgradeSubmitting}
+                        >
+                          {isThai ? "ปิด" : "Close"}
+                        </Button>
+                        <Button
+                          disabled={
+                            upgradeSubmitting ||
+                            !billingOverview ||
+                            billingOverview.paymentMethods.length === 0 ||
+                            !selectedPlanId
+                          }
+                          onClick={async () => {
+                            if (!billingOverview) return;
+                            const plan = billingPlans.find((p) => p.id === selectedPlanId);
+                            if (!plan) return;
+
+                            const pmId =
+                              selectedPaymentMethodId ||
+                              billingOverview.customer.defaultPaymentMethodId ||
+                              billingOverview.paymentMethods[0]?.id;
+                            if (!pmId) {
+                              toast.error(
+                                isThai
+                                  ? "ยังไม่มีบัตรสำหรับตัดเงิน"
+                                  : "No payment method available",
+                              );
+                              return;
+                            }
+
+                            setUpgradeSubmitting(true);
+                            try {
+                              const res = await fetch("/api/billing/subscribe", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ planId: plan.id, paymentMethodId: pmId }),
+                              });
+                              const data = await res.json();
+                              if (!res.ok || data.error) {
+                                throw new Error(data.error || "Failed to create subscription");
+                              }
+                              toast.success(
+                                isThai
+                                  ? "อัปเกรดแพ็กเกจสำเร็จ"
+                                  : "Subscription created successfully",
+                              );
+                              await loadBillingOverview();
+                              setUpgradeOpen(false);
+                            } catch (e) {
+                              toast.error(
+                                e instanceof Error
+                                  ? e.message
+                                  : isThai
+                                    ? "อัปเกรดไม่สำเร็จ"
+                                    : "Failed to upgrade subscription",
+                              );
+                            } finally {
+                              setUpgradeSubmitting(false);
+                            }
+                          }}
+                        >
+                          {upgradeSubmitting
+                            ? isThai
+                              ? "กำลังยืนยัน..."
+                              : "Confirming..."
+                            : isThai
+                              ? "ยืนยันการอัปเกรด"
+                              : "Confirm upgrade"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 </section>
               )}
 

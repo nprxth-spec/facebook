@@ -28,6 +28,7 @@ model User {
   preferences       UserPreferences?
   interestPresets   InterestAudiencePreset[]
   messengerTemplates MessengerTemplate[]
+  aiUsages         AiUsage[]
 }
 
 model Account {
@@ -179,3 +180,30 @@ model MessengerTemplate {
 
   @@index([userId, updatedAt])
 }
+
+/// ประวัติการใช้งาน Free Trial ตามอีเมล เพื่อกันลบแล้วสมัครใหม่ใช้สิทธิ์ซ้ำ
+model TrialHistory {
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  firstSignupAt       DateTime
+  freeTrialStartedAt  DateTime
+  freeTrialExpiredAt  DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+/// เก็บการใช้เครดิต AI ต่อผู้ใช้ในแต่ละเดือน (สำหรับฟีเจอร์ AI ต่าง ๆ)
+model AiUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  month     String   // รูปแบบเช่น '2026-03'
+  used      Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month])
+  @@index([userId, month])
+}
+
