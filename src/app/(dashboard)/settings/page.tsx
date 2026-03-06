@@ -103,7 +103,7 @@ const getTimezoneLabel = (tz: string) => {
 };
 
 function SettingsContent() {
-  const { data: session } = useSession();
+  const { data: session, update: updateSession } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const VALID_TABS = ["account", "connections", "manager-accounts", "facebook-pages", "billing", "preferences", "sessions", "delete"];
@@ -118,6 +118,7 @@ function SettingsContent() {
   const [sessionInfo, setSessionInfo] = useState<{ ip: string; userAgent: string } | null>(null);
   const [hasAutoSyncedManagerAccounts, setHasAutoSyncedManagerAccounts] = useState(false);
   const [hasAutoSyncedFacebookPages, setHasAutoSyncedFacebookPages] = useState(false);
+  const [justLinkedFacebook, setJustLinkedFacebook] = useState(false);
 
   // Handle success/error from custom Facebook link OAuth callback
   useEffect(() => {
@@ -125,10 +126,20 @@ function SettingsContent() {
     const error = searchParams.get("error");
     if (success === "linked") {
       toast.success(isThai ? "เชื่อมต่อ Facebook ใหม่เรียบร้อย" : "Facebook account linked successfully");
-      router.replace("/settings?tab=manager-accounts");
+      setJustLinkedFacebook(true);
+      updateSession?.().then(() => {
+        router.replace("/settings?tab=manager-accounts");
+      }).catch(() => {
+        router.replace("/settings?tab=manager-accounts");
+      });
     } else if (success === "reconnected") {
       toast.success(isThai ? "อัปเดต Token Facebook เรียบร้อย" : "Facebook token refreshed");
-      router.replace("/settings?tab=manager-accounts");
+      setJustLinkedFacebook(true);
+      updateSession?.().then(() => {
+        router.replace("/settings?tab=manager-accounts");
+      }).catch(() => {
+        router.replace("/settings?tab=manager-accounts");
+      });
     } else if (error === "already_linked_to_another_user") {
       toast.error(isThai ? "บัญชี Facebook นี้ถูกเชื่อมต่อกับ User อื่นแล้ว" : "This Facebook account is already linked to another user");
       router.replace("/settings?tab=connections");
@@ -667,15 +678,16 @@ function SettingsContent() {
     if (activeTab === "facebook-pages") reloadFacebookPages();
     if (activeTab === "connections") reloadFbConnections();
   }, [reloadManagerAccounts, reloadFacebookPages, reloadFbConnections, activeTab, session?.user?.id]);
-  // Auto-sync Facebook ad accounts once when opening the Manager Accounts tab
+  // Auto-sync Facebook ad accounts once when opening the Manager Accounts tab (หรือเมื่อเพิ่งเชื่อม Facebook จาก OAuth)
   useEffect(() => {
     if (activeTab !== "manager-accounts") return;
-    if (hasAutoSyncedManagerAccounts) return;
-    if (!hasFacebook) return;
+    if (hasAutoSyncedManagerAccounts && !justLinkedFacebook) return;
+    if (!hasFacebook && !justLinkedFacebook) return;
 
     setHasAutoSyncedManagerAccounts(true);
+    if (justLinkedFacebook) setJustLinkedFacebook(false);
     syncManagerAccountsFromFacebook();
-  }, [activeTab, hasFacebook, hasAutoSyncedManagerAccounts, syncManagerAccountsFromFacebook]);
+  }, [activeTab, hasFacebook, hasAutoSyncedManagerAccounts, justLinkedFacebook, syncManagerAccountsFromFacebook]);
 
   // Auto-sync Facebook pages once when opening the Facebook Pages tab
   useEffect(() => {
