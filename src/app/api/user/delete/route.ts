@@ -1,3 +1,51 @@
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { assertSameOrigin } from "@/lib/security";
+
+export async function DELETE(req: Request) {
+  try {
+    assertSameOrigin(req);
+  } catch {
+    return NextResponse.json({ error: "Invalid origin" }, { status: 403 });
+  }
+
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const userId = session.user.id;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // ลบทุกอย่างที่ผูกกับ userId ก่อน (ส่วนใหญ่ตั้ง onDelete: Cascade อยู่แล้ว แต่กันกรณีถูกเปลี่ยน schema ในอนาคต)
+      await tx.session.deleteMany({ where: { userId } });
+      await tx.account.deleteMany({ where: { userId } });
+      await tx.exportLog.deleteMany({ where: { userId } });
+      await tx.exportConfig.deleteMany({ where: { userId } });
+      await tx.managerAccount.deleteMany({ where: { userId } });
+      await tx.facebookPage.deleteMany({ where: { userId } });
+      await tx.userPreferences.deleteMany({ where: { userId } });
+      await tx.interestAudiencePreset.deleteMany({ where: { userId } });
+      await tx.messengerTemplate.deleteMany({ where: { userId } });
+      await tx.aiUsage.deleteMany({ where: { userId } });
+      await tx.userActivityLog.deleteMany({ where: { userId } });
+
+      // ลบ user record ทิ้งสุดท้าย
+      await tx.user.delete({ where: { id: userId } });
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (e: unknown) {
+    console.error("[user/delete] Failed to delete user", e);
+    return NextResponse.json(
+      { error: "Failed to delete account. Please contact support." },
+      { status: 500 }
+    );
+  }
+}
+
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
