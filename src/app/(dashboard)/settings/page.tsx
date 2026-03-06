@@ -116,8 +116,6 @@ function SettingsContent() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionInfoLoading, setSessionInfoLoading] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<{ ip: string; userAgent: string } | null>(null);
-  const [hasAutoSyncedManagerAccounts, setHasAutoSyncedManagerAccounts] = useState(false);
-  const [hasAutoSyncedFacebookPages, setHasAutoSyncedFacebookPages] = useState(false);
 
   // Handle success/error from custom Facebook link OAuth callback
   useEffect(() => {
@@ -662,13 +660,31 @@ function SettingsContent() {
   };
 
   useEffect(() => {
-    if (!session?.user?.id) return; // Wait for session to load
+    if (!session?.user?.id) return;
 
-    // Reload data from DB when tab changes (ไม่ยิง Facebook API เอง)
-    if (activeTab === "manager-accounts") reloadManagerAccounts();
-    if (activeTab === "facebook-pages") reloadFacebookPages();
-    if (activeTab === "connections") reloadFbConnections();
-  }, [reloadManagerAccounts, reloadFacebookPages, reloadFbConnections, activeTab, session?.user?.id]);
+    if (activeTab === "connections") {
+      reloadFbConnections();
+      return;
+    }
+    // Manager Accounts: มี Facebook = ดึงจาก Facebook เลยครั้งเดียว (ไม่โหลดจาก DB ก่อนแล้วค่อย sync)
+    if (activeTab === "manager-accounts") {
+      if (hasFacebook) {
+        syncManagerAccountsFromFacebook().finally(() => reloadManagerAccounts());
+      } else {
+        reloadManagerAccounts();
+      }
+      return;
+    }
+    // Facebook Pages: มี Facebook = ดึงจาก Facebook เลยครั้งเดียว
+    if (activeTab === "facebook-pages") {
+      if (hasFacebook) {
+        syncFacebookPages().finally(() => reloadFacebookPages());
+      } else {
+        reloadFacebookPages();
+      }
+      return;
+    }
+  }, [activeTab, session?.user?.id, hasFacebook, reloadManagerAccounts, reloadFacebookPages, reloadFbConnections, syncManagerAccountsFromFacebook, syncFacebookPages]);
 
   useEffect(() => {
     setAccountsPage(1);
