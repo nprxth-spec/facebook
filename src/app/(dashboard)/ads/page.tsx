@@ -537,6 +537,11 @@ export default function AdsPage() {
     cpr: true,
   });
   const [updatingIds, setUpdatingIds] = useState<string[]>([]);
+  const [dropdownMounted, setDropdownMounted] = useState(false);
+
+  useEffect(() => {
+    setDropdownMounted(true);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -979,40 +984,47 @@ export default function AdsPage() {
               </div>
             </div>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="h-10 px-3 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-normal">
-                  <Settings2 className="w-4 h-4 mr-2" />
-                  {isThai ? "คอลัมน์" : "Columns"}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuCheckboxItem checked={visibleColumns.account} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, account: !!v }))}>
-                  {isThai ? "บัญชีโฆษณา" : "Ad account"}
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem checked={visibleColumns.adName} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, adName: !!v }))}>
-                  {isThai ? "ชื่อโฆษณา" : "Ad name"}
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem checked={visibleColumns.page} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, page: !!v }))}>
-                  {isThai ? "เพจ" : "Page"}
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem checked={visibleColumns.targeting} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, targeting: !!v }))}>
-                  {isThai ? "กลุ่มเป้าหมาย" : "Targeting"}
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem checked={visibleColumns.status} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, status: !!v }))}>
-                  {isThai ? "สถานะ" : "Status"}
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem checked={visibleColumns.result} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, result: !!v }))}>
-                  {isThai ? "ผลลัพธ์" : "Results"}
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem checked={visibleColumns.spend} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, spend: !!v }))}>
-                  {isThai ? "ยอดใช้จ่าย" : "Spend"}
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem checked={visibleColumns.cpr} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, cpr: !!v }))}>
-                  {isThai ? "ต้นทุนต่อผลลัพธ์" : "CPR"}
-                </DropdownMenuCheckboxItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {dropdownMounted ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="h-10 px-3 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 font-normal">
+                    <Settings2 className="w-4 h-4 mr-2" />
+                    {isThai ? "คอลัมน์" : "Columns"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuCheckboxItem checked={visibleColumns.account} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, account: !!v }))}>
+                    {isThai ? "บัญชีโฆษณา" : "Ad account"}
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={visibleColumns.adName} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, adName: !!v }))}>
+                    {isThai ? "ชื่อโฆษณา" : "Ad name"}
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={visibleColumns.page} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, page: !!v }))}>
+                    {isThai ? "เพจ" : "Page"}
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={visibleColumns.targeting} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, targeting: !!v }))}>
+                    {isThai ? "กลุ่มเป้าหมาย" : "Targeting"}
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={visibleColumns.status} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, status: !!v }))}>
+                    {isThai ? "สถานะ" : "Status"}
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={visibleColumns.result} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, result: !!v }))}>
+                    {isThai ? "ผลลัพธ์" : "Results"}
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={visibleColumns.spend} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, spend: !!v }))}>
+                    {isThai ? "ยอดใช้จ่าย" : "Spend"}
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={visibleColumns.cpr} onCheckedChange={(v) => setVisibleColumns((prev: any) => ({ ...prev, cpr: !!v }))}>
+                    {isThai ? "ต้นทุนต่อผลลัพธ์" : "CPR"}
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button variant="outline" className="h-10 px-3 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 font-normal" disabled>
+                <Settings2 className="w-4 h-4 mr-2" />
+                {isThai ? "คอลัมน์" : "Columns"}
+              </Button>
+            )}
 
             <button
               onClick={handleRefresh}
@@ -1080,7 +1092,7 @@ export default function AdsPage() {
                         )}
                         {visibleColumns.status && (
                           <th
-                            className="px-3 py-3 text-center font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group"
+                            className="px-3 py-3 text-center font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors select-none group min-w-[150px] w-[150px] max-w-[150px]"
                             onClick={() => handleSort("status")}
                           >
                             <div className="flex items-center justify-center gap-1">
@@ -1314,15 +1326,15 @@ export default function AdsPage() {
                             </td>
                           )}
                           {visibleColumns.status && (
-                            <td className="px-3 py-2 text-left">
-                              <div className="flex items-center justify-start gap-2 text-sm font-medium text-gray-800 dark:text-gray-200">
+                            <td className="px-3 py-2 text-left align-top min-w-[150px] max-w-[150px]">
+                              <div className="flex items-start gap-2 text-sm font-medium text-gray-800 dark:text-gray-200 min-w-0">
                                 <span
-                                  className={`w-2.5 h-2.5 rounded-full shrink-0 ${getStatusColor(
+                                  className={`w-2.5 h-2.5 rounded-full shrink-0 mt-0.5 ${getStatusColor(
                                     ad.status,
                                     ad.spend,
                                   )} shadow-sm`}
                                 />
-                                <span className="truncate whitespace-nowrap">
+                                <span className="line-clamp-2 break-words">
                                   {formatStatus(ad.status, ad.spend)}
                                 </span>
                               </div>
@@ -1352,64 +1364,49 @@ export default function AdsPage() {
                         </tr>
                       ))}
                     </tbody>
+                    {sortedAds.length > 0 && (
+                      <tfoot className="border-t-2 border-gray-200 dark:border-gray-700 bg-slate-50/70 dark:bg-slate-900/60">
+                        <tr className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+                          <td className="px-3 py-2 text-center w-[50px] max-w-[50px]" />
+                          <td className="px-3 py-2 text-center w-[70px] max-w-[70px]" />
+                          {visibleColumns.account && (
+                            <td className="px-3 py-2" />
+                          )}
+                          {visibleColumns.adName && (
+                            <td className="p-[1px] pl-2" />
+                          )}
+                          {visibleColumns.page && (
+                            <td className="p-[1px] pl-2" />
+                          )}
+                          {visibleColumns.targeting && (
+                            <td className="px-3 py-2 w-[220px] max-w-[220px]" />
+                          )}
+                          {visibleColumns.status && (
+                            <td className="px-3 py-2 text-left min-w-[150px] max-w-[150px]">
+                              {isThai ? "รวมทั้งหมด" : "Total"}
+                            </td>
+                          )}
+                          {visibleColumns.result && (
+                            <td className="px-3 py-2 text-right">
+                              {formatCurrency(totals.result)}
+                            </td>
+                          )}
+                          {visibleColumns.spend && (
+                            <td className="px-3 py-2 text-right">
+                              {formatCurrency(totals.spend)}
+                            </td>
+                          )}
+                          {visibleColumns.cpr && (
+                            <td className="px-3 py-2 text-right">
+                              {formatCurrency(totals.avgCpr)}
+                            </td>
+                          )}
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
               </div>
-
-              {sortedAds.length > 0 && (
-                <div className="border-t border-gray-200 dark:border-gray-700 bg-slate-50/70 dark:bg-slate-900/60">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      <tr className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">
-                        {/* # */}
-                        <td className="px-3 py-2 w-[50px] max-w-[50px]" />
-                        {/* On/Off */}
-                        <td className="px-3 py-2 w-[70px] max-w-[70px]" />
-                        {/* Ad account */}
-                        {visibleColumns.account && (
-                          <td className="px-3 py-2" />
-                        )}
-                        {/* Ad name */}
-                        {visibleColumns.adName && (
-                          <td className="px-3 py-2" />
-                        )}
-                        {/* Page */}
-                        {visibleColumns.page && (
-                          <td className="px-3 py-2" />
-                        )}
-                        {/* Targeting */}
-                        {visibleColumns.targeting && (
-                          <td className="px-3 py-2" />
-                        )}
-                        {/* Status */}
-                        {visibleColumns.status && (
-                          <td className="px-3 py-2 text-left">
-                            {isThai ? "รวมทั้งหมด" : "Total"}
-                          </td>
-                        )}
-                        {/* Results total */}
-                        {visibleColumns.result && (
-                          <td className="px-3 py-2 text-right">
-                            {formatCurrency(totals.result)}
-                          </td>
-                        )}
-                        {/* Spend total */}
-                        {visibleColumns.spend && (
-                          <td className="px-3 py-2 text-right">
-                            {formatCurrency(totals.spend)}
-                          </td>
-                        )}
-                        {/* Average CPR */}
-                        {visibleColumns.cpr && (
-                          <td className="px-3 py-2 text-right">
-                            {formatCurrency(totals.avgCpr)}
-                          </td>
-                        )}
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
 
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-gray-800">
