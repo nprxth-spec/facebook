@@ -26,7 +26,11 @@ function colLetterToIndex(letter: string): number {
 }
 
 /** ดึงข้อมูลโฆษณาจาก FB /ads endpoint (ไม่ใช่ insights) */
-async function fetchAdsInfo(accountId: string, token: string): Promise<Record<string, unknown>[]> {
+async function fetchAdsInfo(
+    accountId: string,
+    token: string,
+    accountNameFromDb?: string
+): Promise<Record<string, unknown>[]> {
     const fields = [
         "id",
         "name",
@@ -41,10 +45,20 @@ async function fetchAdsInfo(accountId: string, token: string): Promise<Record<st
         "insights.date_preset(maximum){spend}"
     ].join(",");
 
-    // ดึง account name แยก
-    const accountRes = await fetch(`${FB_API}/${accountId}?fields=name&access_token=${token}`);
-    const accountData = await accountRes.json() as { name?: string };
-    const accountName = accountData.name ?? accountId;
+    // ถ้ามีชื่อบัญชีจาก DB แล้ว ให้ใช้เลย เพื่อลดการเรียก FB API ซ้ำ
+    let accountName = accountNameFromDb ?? accountId;
+    if (!accountNameFromDb) {
+        try {
+            const accountRes = await fetch(`${FB_API}/${accountId}?fields=name&access_token=${token}`);
+            const accountData = await accountRes.json() as { name?: string; error?: unknown };
+            if (!("error" in accountData) && accountData.name) {
+                accountName = accountData.name;
+            }
+        } catch {
+            // ถ้าดึงชื่อไม่ได้ ให้ fallback เป็น accountId ตามเดิม
+            accountName = accountId;
+        }
+    }
 
     let rows: Record<string, unknown>[] = [];
     let url: string | null =
@@ -245,11 +259,27 @@ export async function POST(req: Request) {
     try {
         // ดึง ad จากทุก account ที่เลือก (ใช้ token ที่ดีที่สุดสำหรับ account นั้น)
         const allAds: Record<string, unknown>[] = [];
+
+        // ใช้ชื่อบัญชีจาก ManagerAccount (ถ้ามี) แทนการดึงจาก Facebook ซ้ำ
+        const dbAccounts = await prisma.managerAccount.findMany({
+            where: {
+                userId: session.user.id,
+                accountId: { in: adAccountIds },
+            },
+            select: { accountId: true, name: true },
+        });
+        const accountNameMap = new Map<string, string>();
+        for (const acc of dbAccounts) {
+            if (acc.name) {
+                accountNameMap.set(acc.accountId, acc.name);
+            }
+        }
         for (const accountId of adAccountIds) {
             // หา token ที่ตรงกับ account นี้ หรือใช้ token แรกที่มี
             const token = fbTokens[0].token;
+            const accountNameFromDb = accountNameMap.get(accountId);
             try {
-                const ads = await fetchAdsInfo(accountId, token);
+                const ads = await fetchAdsInfo(accountId, token, accountNameFromDb);
                 allAds.push(...ads);
             } catch (e) {
                 console.warn(`[export-ads] Failed to fetch ads for ${accountId}:`, e);

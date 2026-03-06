@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -521,6 +522,8 @@ export default function AdsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
 
+  const searchParams = useSearchParams();
+
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [fromDateCustom, setFromDateCustom] = useState<Date | null>(null);
@@ -545,6 +548,8 @@ export default function AdsPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      const urlAccountId = searchParams.get("accountId");
+
       const savedSearch = localStorage.getItem("ads_search");
       if (savedSearch) {
         setSearch(savedSearch);
@@ -561,7 +566,9 @@ export default function AdsPage() {
       setToDateCustom(initialTo);
 
       const savedAccounts = localStorage.getItem("ads_selectedAccounts");
-      if (savedAccounts) {
+      if (urlAccountId) {
+        setSelectedAccounts([urlAccountId]);
+      } else if (savedAccounts) {
         try {
           const parsed = JSON.parse(savedAccounts);
           if (Array.isArray(parsed)) setSelectedAccounts(parsed);

@@ -14,6 +14,7 @@ import {
   Wrench,
   Sparkles,
   TableProperties,
+  Users,
 } from "lucide-react";
 import React from "react";
 import { useTheme } from "@/components/providers/ThemeProvider";
@@ -28,6 +29,11 @@ const navItems = [
     key: "ads",
     href: "/ads",
     icon: BarChart3,
+  },
+  {
+    key: "ad_accounts",
+    href: "/ad-accounts",
+    icon: Users,
   },
   {
     key: "create",

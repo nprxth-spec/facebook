@@ -116,6 +116,8 @@ function SettingsContent() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionInfoLoading, setSessionInfoLoading] = useState(false);
   const [sessionInfo, setSessionInfo] = useState<{ ip: string; userAgent: string } | null>(null);
+  const [hasAutoSyncedManagerAccounts, setHasAutoSyncedManagerAccounts] = useState(false);
+  const [hasAutoSyncedFacebookPages, setHasAutoSyncedFacebookPages] = useState(false);
 
   // Handle success/error from custom Facebook link OAuth callback
   useEffect(() => {
@@ -472,36 +474,14 @@ function SettingsContent() {
 
 
 
-  // ดึงบัญชีโฆษณาจาก Facebook แล้ว sync เข้า ManagerAccount
+  // ดึงบัญชีโฆษณาจาก Facebook แล้ว sync เข้า ManagerAccount (ไม่มีคูลดาวน์ฝั่ง client)
   const syncManagerAccountsFromFacebook = async () => {
-    // 10-minute rate limit (600,000 ms)
-    const lastSyncStr = localStorage.getItem("lastFbSyncTime");
-    if (lastSyncStr) {
-      const lastSync = parseInt(lastSyncStr, 10);
-      const now = Date.now();
-      const timeElapsed = now - lastSync;
-      const timeRemaining = 600000 - timeElapsed;
-
-      if (timeRemaining > 0) {
-        const minutes = Math.floor(timeRemaining / 60000);
-        const seconds = Math.floor((timeRemaining % 60000) / 1000);
-
-        toast.info(
-          isThai
-            ? `ใช้ข้อมูลล่าสุด (ซิงค์ใหม่ได้อีกครั้งใน ${minutes} นาที ${seconds} วินาที)`
-            : `Cached data used (Can sync again in ${minutes}m ${seconds}s)`
-        );
-        reloadManagerAccounts();
-        return;
-      }
-    }
-
     setSyncingFbAccounts(true);
     try {
       const res = await fetch("/api/facebook/ad-accounts?sync=true");
       const data = await res.json();
 
-      // Handle server-side rate limiting
+      // Handle server-side rate limiting (เช่น Facebook API จำกัดเอง)
       if (res.status === 429) {
         const secs = data.secondsLeft ?? 600;
         const minutes = Math.floor(secs / 60);
@@ -687,6 +667,25 @@ function SettingsContent() {
     if (activeTab === "facebook-pages") reloadFacebookPages();
     if (activeTab === "connections") reloadFbConnections();
   }, [reloadManagerAccounts, reloadFacebookPages, reloadFbConnections, activeTab, session?.user?.id]);
+  // Auto-sync Facebook ad accounts once when opening the Manager Accounts tab
+  useEffect(() => {
+    if (activeTab !== "manager-accounts") return;
+    if (hasAutoSyncedManagerAccounts) return;
+    if (!hasFacebook) return;
+
+    setHasAutoSyncedManagerAccounts(true);
+    syncManagerAccountsFromFacebook();
+  }, [activeTab, hasFacebook, hasAutoSyncedManagerAccounts, syncManagerAccountsFromFacebook]);
+
+  // Auto-sync Facebook pages once when opening the Facebook Pages tab
+  useEffect(() => {
+    if (activeTab !== "facebook-pages") return;
+    if (hasAutoSyncedFacebookPages) return;
+    if (!hasFacebook) return;
+
+    setHasAutoSyncedFacebookPages(true);
+    syncFacebookPages();
+  }, [activeTab, hasFacebook, hasAutoSyncedFacebookPages, syncFacebookPages]);
 
   useEffect(() => {
     setAccountsPage(1);
@@ -798,25 +797,7 @@ function SettingsContent() {
     }
   };
 
-  const syncFacebookPages = async () => {
-    // 10-minute rate limit (600,000 ms) — same as Manager Accounts
-    const lastSyncStr = localStorage.getItem("lastFbPagesSyncTime");
-    if (lastSyncStr) {
-      const lastSync = parseInt(lastSyncStr, 10);
-      const timeRemaining = 600000 - (Date.now() - lastSync);
-      if (timeRemaining > 0) {
-        const minutes = Math.floor(timeRemaining / 60000);
-        const seconds = Math.floor((timeRemaining % 60000) / 1000);
-        toast.info(
-          isThai
-            ? `ใช้ข้อมูลล่าสุด (ซิงค์ใหม่ได้อีกครั้งใน ${minutes} นาที ${seconds} วินาที)`
-            : `Cached data used (Can sync again in ${minutes}m ${seconds}s)`
-        );
-        reloadFacebookPages();
-        return;
-      }
-    }
-
+  async function syncFacebookPages() {
     setSyncingPages(true);
     try {
       const res = await fetch("/api/facebook/pages?sync=true");
@@ -854,7 +835,6 @@ function SettingsContent() {
         )
       );
 
-      localStorage.setItem("lastFbPagesSyncTime", Date.now().toString());
       await reloadFacebookPages();
       toast.success(isThai ? "ดึงเพจจาก Facebook เรียบร้อย" : "Pages synced successfully");
     } catch (e) {
@@ -862,7 +842,7 @@ function SettingsContent() {
     } finally {
       setSyncingPages(false);
     }
-  };
+  }
 
   const deleteAccount = async (id: string) => {
     await fetch("/api/manager-accounts", {
@@ -1341,27 +1321,6 @@ function SettingsContent() {
                         />
                         {isThai ? "รีเฟรช" : "Refresh"}
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-3 text-xs gap-1.5 bg-white text-[#1877F2] border-blue-200 hover:bg-blue-50 dark:bg-transparent dark:text-[#9ec5ff] dark:border-blue-800 dark:hover:bg-blue-950/40"
-                        onClick={syncManagerAccountsFromFacebook}
-                        disabled={syncingFbAccounts}
-                      >
-                        {syncingFbAccounts ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            {isThai ? "กำลังดึง..." : "Syncing..."}
-                          </>
-                        ) : (
-                          <>
-                            <span className="w-5 h-5 rounded-full border border-white/60 dark:border-gray-700/80 bg-white/60 dark:bg-gray-900/60 flex items-center justify-center">
-                              <FacebookIcon className="w-3.5 h-3.5 text-[#1877F2]" />
-                            </span>
-                            {isThai ? "ดึงจาก Facebook" : "Sync from Facebook"}
-                          </>
-                        )}
-                      </Button>
                     </div>
                   </div>
 
@@ -1383,8 +1342,8 @@ function SettingsContent() {
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
                         {isThai
-                          ? "กดปุ่ม “ดึงจาก Facebook” เพื่อโหลดบัญชีโฆษณา"
-                          : "Click “Sync from Facebook” to load ad accounts."}
+                          ? "กำลังดึงบัญชีโฆษณาจาก Facebook อัตโนมัติ หากไม่มีบัญชี แสดงว่าไม่มีสิทธิ์ในบัญชีโฆษณาใด ๆ"
+                          : "Ad accounts are fetched automatically from Facebook. If nothing appears, this user may not have access to any ad accounts."}
                       </p>
                     </div>
                   ) : (
@@ -2490,27 +2449,6 @@ function SettingsContent() {
                         <Loader2 className={cn("w-3 h-3 mr-1 text-gray-500", pagesLoading && "animate-spin")} />
                         {isThai ? "รีเฟรช" : "Refresh"}
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-3 text-xs gap-1.5 bg-white text-[#1877F2] border-blue-200 hover:bg-blue-50 dark:bg-transparent dark:text-[#9ec5ff] dark:border-blue-800 dark:hover:bg-blue-950/40"
-                        onClick={syncFacebookPages}
-                        disabled={syncingPages}
-                      >
-                        {syncingPages ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin" />
-                            {isThai ? "กำลังดึง..." : "Syncing..."}
-                          </>
-                        ) : (
-                          <>
-                            <span className="w-5 h-5 rounded-full border border-white/60 dark:border-gray-700/80 bg-white/60 dark:bg-gray-900/60 flex items-center justify-center">
-                              <FacebookIcon className="w-3.5 h-3.5 text-[#1877F2]" />
-                            </span>
-                            {isThai ? "ดึงเพจจาก Facebook" : "Sync Pages"}
-                          </>
-                        )}
-                      </Button>
                     </div>
                   </div>
 
@@ -2525,7 +2463,9 @@ function SettingsContent() {
                         {isThai ? "ยังไม่มีเพจในระบบ" : "No pages yet."}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        {isThai ? "กดปุ่ม “ดึงเพจจาก Facebook” เพื่อโหลด" : "Click “Sync Pages” to load pages."}
+                        {isThai
+                          ? "กำลังดึงเพจจาก Facebook อัตโนมัติ หากไม่มีเพจ แสดงว่าไม่มีสิทธิ์ในเพจใด ๆ"
+                          : "Pages are fetched automatically from Facebook. If nothing appears, this user may not have access to any pages."}
                       </p>
                     </div>
                   ) : (() => {

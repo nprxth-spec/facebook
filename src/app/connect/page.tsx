@@ -52,7 +52,11 @@ export default function ConnectPage() {
 
   const handleConnect = async (provider: "google" | "facebook") => {
     setLoading(true);
-    await signIn(provider, { callbackUrl: "/connect" });
+    const callbackUrl =
+      provider === "facebook"
+        ? "/settings?tab=manager-accounts"
+        : "/connect";
+    await signIn(provider, { callbackUrl });
   };
 
   const handleSkip = () => {

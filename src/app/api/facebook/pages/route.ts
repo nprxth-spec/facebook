@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { runWithConcurrency } from "@/lib/concurrency";
 
 const FB_API = "https://graph.facebook.com/v22.0";
-const SYNC_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+const SYNC_COOLDOWN_MS = 3 * 60 * 1000; // 3 minutes
 
 /**
  * Fetch all pages the user has access to via Facebook Graph API.
@@ -23,18 +23,24 @@ export async function GET(req: Request) {
         const { searchParams } = new URL(req.url);
         const isSync = searchParams.get("sync") === "true";
 
-        // ── Server-side rate limiting (Only for sync=true) ──────────────────────────
+        // ── Server-side rate limiting (Only for sync=true, และเฉพาะกรณีมี facebookPage อยู่แล้ว) ──
         if (isSync) {
-            const user = await prisma.user.findUnique({
-                where: { id: userId },
-                select: { lastFbPagesSyncAt: true },
+            const existingPagesCount = await prisma.facebookPage.count({
+                where: { userId },
             });
 
-            if (user?.lastFbPagesSyncAt) {
-                const elapsed = Date.now() - user.lastFbPagesSyncAt.getTime();
-                if (elapsed < SYNC_COOLDOWN_MS) {
-                    const secondsLeft = Math.ceil((SYNC_COOLDOWN_MS - elapsed) / 1000);
-                    return NextResponse.json({ error: `rate_limited`, secondsLeft }, { status: 429 });
+            if (existingPagesCount > 0) {
+                const user = await prisma.user.findUnique({
+                    where: { id: userId },
+                    select: { lastFbPagesSyncAt: true },
+                });
+
+                if (user?.lastFbPagesSyncAt) {
+                    const elapsed = Date.now() - user.lastFbPagesSyncAt.getTime();
+                    if (elapsed < SYNC_COOLDOWN_MS) {
+                        const secondsLeft = Math.ceil((SYNC_COOLDOWN_MS - elapsed) / 1000);
+                        return NextResponse.json({ error: `rate_limited`, secondsLeft }, { status: 429 });
+                    }
                 }
             }
         }
