@@ -125,10 +125,10 @@ function SettingsContent() {
     const error = searchParams.get("error");
     if (success === "linked") {
       toast.success(isThai ? "เชื่อมต่อ Facebook ใหม่เรียบร้อย" : "Facebook account linked successfully");
-      router.replace("/settings?tab=connections");
+      router.replace("/settings?tab=manager-accounts");
     } else if (success === "reconnected") {
       toast.success(isThai ? "อัปเดต Token Facebook เรียบร้อย" : "Facebook token refreshed");
-      router.replace("/settings?tab=connections");
+      router.replace("/settings?tab=manager-accounts");
     } else if (error === "already_linked_to_another_user") {
       toast.error(isThai ? "บัญชี Facebook นี้ถูกเชื่อมต่อกับ User อื่นแล้ว" : "This Facebook account is already linked to another user");
       router.replace("/settings?tab=connections");
@@ -2427,6 +2427,13 @@ function SettingsContent() {
                         ? "เลือกเพจ Facebook ที่จะนำมาดึง Engagement สร้าง Audience"
                         : "Select which Facebook pages to use for Custom Audiences."}
                     </p>
+                    {syncingPages && (
+                      <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                        {isThai
+                          ? "กำลังดึงข้อมูลล่าสุดจาก Facebook..."
+                          : "Syncing latest data from Facebook..."}
+                      </p>
+                    )}
                   </div>
                   {/* Toolbar */}
                   <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">

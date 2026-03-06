@@ -83,8 +83,8 @@ export async function GET(req: Request) {
             return true;
         });
 
-        // Fetch is_published + picture URL — max 5 concurrent calls
-        const pages = await runWithConcurrency(uniqueRaw, 5, async (p) => {
+        // Fetch is_published + picture URL — tune concurrency for faster sync on many pages
+        const pages = await runWithConcurrency(uniqueRaw, 10, async (p) => {
             let pageStatus: string | null = null;
             let pictureUrl: string | null = null;
 
