@@ -118,7 +118,6 @@ function SettingsContent() {
   const [sessionInfo, setSessionInfo] = useState<{ ip: string; userAgent: string } | null>(null);
   const [hasAutoSyncedManagerAccounts, setHasAutoSyncedManagerAccounts] = useState(false);
   const [hasAutoSyncedFacebookPages, setHasAutoSyncedFacebookPages] = useState(false);
-  const [justLinkedFacebook, setJustLinkedFacebook] = useState(false);
 
   // Handle success/error from custom Facebook link OAuth callback
   useEffect(() => {
@@ -126,20 +125,12 @@ function SettingsContent() {
     const error = searchParams.get("error");
     if (success === "linked") {
       toast.success(isThai ? "เชื่อมต่อ Facebook ใหม่เรียบร้อย" : "Facebook account linked successfully");
-      setJustLinkedFacebook(true);
-      updateSession?.().then(() => {
-        router.replace("/settings?tab=manager-accounts");
-      }).catch(() => {
-        router.replace("/settings?tab=manager-accounts");
-      });
+      updateSession?.();
+      router.replace("/settings?tab=manager-accounts");
     } else if (success === "reconnected") {
       toast.success(isThai ? "อัปเดต Token Facebook เรียบร้อย" : "Facebook token refreshed");
-      setJustLinkedFacebook(true);
-      updateSession?.().then(() => {
-        router.replace("/settings?tab=manager-accounts");
-      }).catch(() => {
-        router.replace("/settings?tab=manager-accounts");
-      });
+      updateSession?.();
+      router.replace("/settings?tab=manager-accounts");
     } else if (error === "already_linked_to_another_user") {
       toast.error(isThai ? "บัญชี Facebook นี้ถูกเชื่อมต่อกับ User อื่นแล้ว" : "This Facebook account is already linked to another user");
       router.replace("/settings?tab=connections");
@@ -673,31 +664,11 @@ function SettingsContent() {
   useEffect(() => {
     if (!session?.user?.id) return; // Wait for session to load
 
-    // Reload data when tab changes
+    // Reload data from DB when tab changes (ไม่ยิง Facebook API เอง)
     if (activeTab === "manager-accounts") reloadManagerAccounts();
     if (activeTab === "facebook-pages") reloadFacebookPages();
     if (activeTab === "connections") reloadFbConnections();
   }, [reloadManagerAccounts, reloadFacebookPages, reloadFbConnections, activeTab, session?.user?.id]);
-  // Auto-sync Facebook ad accounts once when opening the Manager Accounts tab (หรือเมื่อเพิ่งเชื่อม Facebook จาก OAuth)
-  useEffect(() => {
-    if (activeTab !== "manager-accounts") return;
-    if (hasAutoSyncedManagerAccounts && !justLinkedFacebook) return;
-    if (!hasFacebook && !justLinkedFacebook) return;
-
-    setHasAutoSyncedManagerAccounts(true);
-    if (justLinkedFacebook) setJustLinkedFacebook(false);
-    syncManagerAccountsFromFacebook();
-  }, [activeTab, hasFacebook, hasAutoSyncedManagerAccounts, justLinkedFacebook, syncManagerAccountsFromFacebook]);
-
-  // Auto-sync Facebook pages once when opening the Facebook Pages tab
-  useEffect(() => {
-    if (activeTab !== "facebook-pages") return;
-    if (hasAutoSyncedFacebookPages) return;
-    if (!hasFacebook) return;
-
-    setHasAutoSyncedFacebookPages(true);
-    syncFacebookPages();
-  }, [activeTab, hasFacebook, hasAutoSyncedFacebookPages, syncFacebookPages]);
 
   useEffect(() => {
     setAccountsPage(1);
@@ -1322,13 +1293,13 @@ function SettingsContent() {
                         variant="outline"
                         size="sm"
                         className="h-8 px-3 text-xs"
-                        onClick={reloadManagerAccounts}
-                        disabled={accountsLoading}
+                        onClick={syncManagerAccountsFromFacebook}
+                        disabled={accountsLoading || syncingFbAccounts}
                       >
                         <Loader2
                           className={cn(
                             "w-3 h-3 mr-1 text-gray-500",
-                            accountsLoading && "animate-spin"
+                            (accountsLoading || syncingFbAccounts) && "animate-spin"
                           )}
                         />
                         {isThai ? "รีเฟรช" : "Refresh"}
@@ -2462,10 +2433,10 @@ function SettingsContent() {
                         variant="outline"
                         size="sm"
                         className="h-8 px-3 text-xs"
-                        onClick={reloadFacebookPages}
-                        disabled={pagesLoading}
+                        onClick={syncFacebookPages}
+                        disabled={pagesLoading || syncingPages}
                       >
-                        <Loader2 className={cn("w-3 h-3 mr-1 text-gray-500", pagesLoading && "animate-spin")} />
+                        <Loader2 className={cn("w-3 h-3 mr-1 text-gray-500", (pagesLoading || syncingPages) && "animate-spin")} />
                         {isThai ? "รีเฟรช" : "Refresh"}
                       </Button>
                     </div>
