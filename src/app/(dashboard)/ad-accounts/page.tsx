@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { PageShell } from "@/components/layout/PageShell";
 import { useTheme } from "@/components/providers/ThemeProvider";
@@ -138,6 +138,7 @@ export default function AdAccountsTablePage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const hasLoadedRef = useRef(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<CombinedRow | null>(null);
@@ -147,11 +148,12 @@ export default function AdAccountsTablePage() {
 
   useEffect(() => {
     if (status !== "authenticated") {
-      if (status === "unauthenticated") {
-        setLoading(false);
-      }
+      if (status === "unauthenticated") setLoading(false);
+      hasLoadedRef.current = false;
       return;
     }
+    if (hasLoadedRef.current && reloadKey === 0) return;
+    if (reloadKey === 0) hasLoadedRef.current = true;
 
     let cancelled = false;
 
@@ -159,56 +161,58 @@ export default function AdAccountsTablePage() {
       setLoading(true);
       setError(null);
       try {
+        // โหลดจาก DB และดึงสถานะจาก Facebook (ไม่ใช้ sync= เพื่อไม่โดน cooldown และได้สถานะครบ)
         const [maRes, fbRes] = await Promise.all([
           fetch("/api/manager-accounts"),
-          fetch("/api/facebook/ad-accounts?sync=true"),
+          fetch("/api/facebook/ad-accounts"),
         ]);
 
         if (!maRes.ok) {
           throw new Error(isThai ? "โหลดบัญชีจากระบบไม่สำเร็จ" : "Failed to load manager accounts");
         }
-        const maData: ManagerAccount[] = await maRes.json();
+        let maData: ManagerAccount[] = await maRes.json();
         if (!Array.isArray(maData)) {
           throw new Error("Invalid manager accounts response");
         }
 
-        const fbData: { accounts?: FacebookAdAccount[]; error?: string } = await fbRes.json();
         let fbAccounts: FacebookAdAccount[] = [];
-
-        if (fbRes.status === 429) {
-          // ถ้าถูกคูลดาวน์ ให้ใช้ข้อมูลล่าสุดจาก cache แทน โดยเรียก endpoint ปกติที่ไม่ sync
-          const fallbackRes = await fetch("/api/facebook/ad-accounts");
-          if (fallbackRes.ok) {
-            const fallbackData: { accounts?: FacebookAdAccount[] } = await fallbackRes.json();
-            fbAccounts = fallbackData.accounts ?? [];
-          } else {
-            throw new Error(
-              isThai
-                ? "กำลังใช้ข้อมูลล่าสุดจาก Facebook อยู่ กรุณาลองใหม่อีกครั้งภายหลัง"
-                : "Using latest cached data from Facebook. Please try again later."
-            );
+        if (fbRes.ok) {
+          const fbData: { accounts?: FacebookAdAccount[]; error?: string } = await fbRes.json();
+          if (!fbData.error && Array.isArray(fbData.accounts)) {
+            fbAccounts = fbData.accounts;
           }
-        } else if (!fbRes.ok || fbData.error) {
-          throw new Error(
-            isThai
-              ? "โหลดบัญชีโฆษณาจาก Facebook ไม่สำเร็จ"
-              : "Failed to load Facebook ad accounts"
-          );
-        } else {
-          fbAccounts = fbData.accounts ?? [];
         }
+
+        // ถ้ายังไม่มีบัญชีใน DB แต่เชื่อม Facebook แล้ว → sync จาก Facebook เข้า DB ก่อน แล้วโหลดใหม่
+        if (maData.length === 0 && fbRes.status !== 400) {
+          const syncRes = await fetch("/api/facebook/sync/ad-accounts", { method: "POST" });
+          if (syncRes.ok) {
+            const syncData = await syncRes.json();
+            if (Array.isArray(syncData.accounts) && syncData.accounts.length > 0) {
+              maData = syncData.accounts;
+            }
+          }
+          if (maData.length === 0 && fbAccounts.length > 0) {
+            const syncRes2 = await fetch("/api/manager-accounts");
+            if (syncRes2.ok) {
+              const arr = await syncRes2.json();
+              if (Array.isArray(arr)) maData = arr;
+            }
+          }
+        }
+
         const fbMap = new Map<string, FacebookAdAccount>();
         fbAccounts.forEach((a) => {
-          // ManagerAccount.accountId ถูกเก็บเป็น Facebook ad account id แบบ act_XXXX (ตรงกับ a.id)
           if (a.id) {
             fbMap.set(a.id, a);
+            if (a.accountId) fbMap.set(a.accountId, a);
           }
         });
 
         const combined: CombinedRow[] = maData
-          .filter((a) => a.platform === "facebook")
+          .filter((a) => a.platform === "facebook" && a.isActive)
           .map((ma) => {
-            const fb = fbMap.get(ma.accountId);
+            const fb = fbMap.get(ma.accountId) ?? fbMap.get(ma.accountId.replace(/^act_/, ""));
             const base: CombinedRow = {
               id: ma.id,
               accountId: ma.accountId,
@@ -249,7 +253,7 @@ export default function AdAccountsTablePage() {
     return () => {
       cancelled = true;
     };
-  }, [status, isThai, reloadKey]);
+  }, [status, reloadKey]);
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -306,22 +310,22 @@ export default function AdAccountsTablePage() {
             <table className="w-full text-sm table-fixed border-collapse">
               <thead className="bg-gray-50 dark:bg-gray-800/60 text-[13px] border-b border-gray-200 dark:border-gray-700 shadow-sm">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-32 border border-gray-200 dark:border-gray-700">
+                  <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-32 border border-gray-200 dark:border-gray-700">
                     {isThai ? "สถานะ" : "Status"}
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-64 border border-gray-200 dark:border-gray-700">
+                  <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-64 border border-gray-200 dark:border-gray-700">
                     {isThai ? "บัญชีโฆษณา" : "Ad Account"}
                   </th>
-                  <th className="px-4 py-2 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-40 border border-gray-200 dark:border-gray-700">
+                  <th className="px-4 py-3.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-40 border border-gray-200 dark:border-gray-700">
                     {isThai ? "ยอดใช้จ่าย / ลิมิต" : "Spend / Limit"}
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-40 border border-gray-200 dark:border-gray-700">
+                  <th className="px-4 py-3.5 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-40 border border-gray-200 dark:border-gray-700">
                     {isThai ? "วิธีชำระเงิน" : "Payment Method"}
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-28 border border-gray-200 dark:border-gray-700">
+                  <th className="px-4 py-3.5 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-28 border border-gray-200 dark:border-gray-700">
                     {isThai ? "สกุลเงิน" : "Currency"}
                   </th>
-                  <th className="px-4 py-2 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-40 border border-gray-200 dark:border-gray-700">
+                  <th className="px-4 py-3.5 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide w-40 border border-gray-200 dark:border-gray-700">
                     {isThai ? "ไทม์โซน" : "Timezone"}
                   </th>
                 </tr>
@@ -336,7 +340,7 @@ export default function AdAccountsTablePage() {
                       className={`border-t border-gray-100 dark:border-gray-800 transition-colors ${
                         idx % 2 === 0
                           ? "bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/60"
-                          : "bg-gray-50/60 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800"
+                          : "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
                       }`}
                     >
                       <td className="px-4 py-1.5 border border-gray-200 dark:border-gray-800">
@@ -422,7 +426,7 @@ export default function AdAccountsTablePage() {
                                 >
                                   <Pencil className="w-3 h-3" />
                                 </button>
-                                <div className="h-1.5 w-32 sm:w-40 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                                <div className="h-1.5 w-32 sm:w-40 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                                   <div
                                     className={`h-full ${barColor}`}
                                     style={{ width: `${percent}%` }}

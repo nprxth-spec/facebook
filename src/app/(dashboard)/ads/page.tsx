@@ -547,56 +547,59 @@ export default function AdsPage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const urlAccountId = searchParams.get("accountId");
+    if (typeof window === "undefined") return;
 
-      const savedSearch = localStorage.getItem("ads_search");
-      if (savedSearch) {
-        setSearch(savedSearch);
-        setDebouncedSearch(savedSearch);
-      }
+    const urlAccountId = searchParams.get("accountId");
+    const savedSearch = localStorage.getItem("ads_search") || "";
+    const savedFrom = localStorage.getItem("ads_fromDate");
+    const savedTo = localStorage.getItem("ads_toDate");
+    const initialFrom = savedFrom ? new Date(savedFrom) : subDays(new Date(), 6);
+    const initialTo = savedTo ? new Date(savedTo) : new Date();
 
-      const savedFrom = localStorage.getItem("ads_fromDate");
-      const savedTo = localStorage.getItem("ads_toDate");
+    setFromDateCustom(initialFrom);
+    setToDateCustom(initialTo);
+    setSearch(savedSearch);
+    setDebouncedSearch(savedSearch);
 
-      const initialFrom = savedFrom ? new Date(savedFrom) : subDays(new Date(), 6);
-      const initialTo = savedTo ? new Date(savedTo) : new Date();
-
-      setFromDateCustom(initialFrom);
-      setToDateCustom(initialTo);
-
-      const savedAccounts = localStorage.getItem("ads_selectedAccounts");
-      if (urlAccountId) {
-        setSelectedAccounts([urlAccountId]);
-      } else if (savedAccounts) {
-        try {
-          const parsed = JSON.parse(savedAccounts);
-          if (Array.isArray(parsed)) setSelectedAccounts(parsed);
-        } catch (e) { }
-      }
-
-      const savedCols = localStorage.getItem("ads_visibleColumns");
-      if (savedCols) {
-        try {
-          setVisibleColumns(prev => ({ ...prev, ...JSON.parse(savedCols) }));
-        } catch (e) { }
-      }
-
-      const savedSort = localStorage.getItem("ads_sortConfig");
-      if (savedSort) {
-        try {
-          setSortConfig(JSON.parse(savedSort));
-        } catch (e) { }
-      }
-
-      const savedPage = localStorage.getItem("ads_currentPage");
-      if (savedPage) {
-        setCurrentPage(parseInt(savedPage, 10) || 1);
-      }
-
-      setIsHydrated(true);
-      fetchAds(initialFrom, initialTo, false, savedSearch || "");
+    let initialAccounts: string[] = [];
+    if (urlAccountId) initialAccounts = [urlAccountId];
+    else {
+      try {
+        const parsed = JSON.parse(localStorage.getItem("ads_selectedAccounts") || "[]");
+        if (Array.isArray(parsed)) initialAccounts = parsed;
+      } catch { }
     }
+
+    const savedCols = localStorage.getItem("ads_visibleColumns");
+    if (savedCols) {
+      try {
+        setVisibleColumns(prev => ({ ...prev, ...JSON.parse(savedCols) }));
+      } catch { }
+    }
+    const savedSort = localStorage.getItem("ads_sortConfig");
+    if (savedSort) {
+      try {
+        setSortConfig(JSON.parse(savedSort));
+      } catch { }
+    }
+    const savedPage = localStorage.getItem("ads_currentPage");
+    if (savedPage) setCurrentPage(parseInt(savedPage, 10) || 1);
+
+    (async () => {
+      const maRes = await fetch("/api/manager-accounts");
+      const maData = await maRes.json().catch(() => []);
+      if (Array.isArray(maData)) {
+        const active = maData.filter((a: { isActive?: boolean }) => a.isActive);
+        setManagerAccounts(active.map((a: { accountId: string; name: string }) => ({ id: a.accountId, name: a.name })));
+        const activeIds = active.map((a: { accountId: string }) => a.accountId);
+        const merged = new Set(initialAccounts);
+        activeIds.forEach((id: string) => merged.add(id));
+        setSelectedAccounts(Array.from(merged));
+      } else {
+        setSelectedAccounts(initialAccounts);
+      }
+      setIsHydrated(true);
+    })();
   }, []);
 
   // Debounce search input
@@ -873,26 +876,6 @@ export default function AdsPage() {
     }
   };
 
-  useEffect(() => {
-    if (!hasMounted.current) {
-      hasMounted.current = true;
-      // fetchAds is now handled by the [debouncedSearch, selectedAccount, isHydrated] effect
-    }
-
-    fetch("/api/manager-accounts")
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setManagerAccounts(
-            data
-              .filter((a: any) => a.isActive)
-              .map((a: any) => ({ id: a.accountId, name: a.name }))
-          );
-        }
-      })
-      .catch(console.error);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -1068,9 +1051,9 @@ export default function AdsPage() {
             <>
               <div className="overflow-x-hidden">
                 <div className="max-h-[600px] overflow-y-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm border-collapse border border-gray-200 dark:border-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-800/60 text-[13px] sticky top-0 z-10 border-b border-gray-200 dark:border-gray-700 shadow-sm">
-                      <tr>
+                      <tr className="[&>th]:border-r [&>th]:border-gray-200 dark:[&>th]:border-gray-700">
                         <th className="px-3 py-3 text-center font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap w-[50px] max-w-[50px]">
                           #
                         </th>
@@ -1157,10 +1140,10 @@ export default function AdsPage() {
                       .map((ad, idx) => (
                         <tr
                           key={ad.id}
-                          className={`border-t border-gray-100 dark:border-gray-800 transition-colors ${
+                          className={`border-t border-gray-200 dark:border-gray-700 [&>td]:border-r [&>td]:border-gray-200 dark:[&>td]:border-gray-700 transition-colors ${
                             idx % 2 === 0
                               ? "bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/60"
-                              : "bg-gray-50/60 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800"
+                              : "bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
                           }`}
                         >
                         <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 w-[50px] max-w-[50px] text-center">
@@ -1373,7 +1356,7 @@ export default function AdsPage() {
                     </tbody>
                     {sortedAds.length > 0 && (
                       <tfoot className="border-t-2 border-gray-200 dark:border-gray-700 bg-slate-50/70 dark:bg-slate-900/60">
-                        <tr className="text-[13px] font-semibold text-gray-900 dark:text-gray-100">
+                        <tr className="text-[13px] font-semibold text-gray-900 dark:text-gray-100 [&>td]:border-r [&>td]:border-gray-200 dark:[&>td]:border-gray-700">
                           <td className="px-3 py-2 text-center w-[50px] max-w-[50px]" />
                           <td className="px-3 py-2 text-center w-[70px] max-w-[70px]" />
                           {visibleColumns.account && (

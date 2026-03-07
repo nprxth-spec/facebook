@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { useSession, signIn, signOut } from "next-auth/react";
@@ -141,7 +141,6 @@ function SettingsContent() {
 
   const connectedProviders = session?.user?.connectedProviders ?? [];
   const hasGoogle = connectedProviders.includes("google");
-  const hasFacebook = connectedProviders.includes("facebook");
 
   const {
     theme: globalTheme,
@@ -464,6 +463,9 @@ function SettingsContent() {
   // Facebook connections (Connections tab)
   const [fbConnections, setFbConnections] = useState<FbConnection[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
+  // ถ้ามีรายการเชื่อมต่อ Facebook ใน state ก็ถือว่าเชื่อมแล้ว (เผื่อ session ยังไม่อัปเดตหลัง OAuth)
+  const hasFacebook =
+    connectedProviders.includes("facebook") || fbConnections.length > 0;
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
 
@@ -474,73 +476,53 @@ function SettingsContent() {
 
 
 
-  // ดึงบัญชีโฆษณาจาก Facebook แล้ว sync เข้า ManagerAccount (ไม่มีคูลดาวน์ฝั่ง client)
-  const syncManagerAccountsFromFacebook = async () => {
+  // ดึงบัญชีโฆษณาจาก Facebook แล้วบันทึกลง DB (ทำที่ server ในคำขอเดียว)
+  // silent = true ตอนเปิดแท็บ (ไม่แสดง toast คูลดาวน์/สำเร็จ)
+  const syncManagerAccountsFromFacebook = async (silent = false) => {
     setSyncingFbAccounts(true);
     try {
-      const res = await fetch("/api/facebook/ad-accounts?sync=true");
+      const res = await fetch("/api/facebook/sync/ad-accounts", { method: "POST" });
       const data = await res.json();
 
-      // Handle server-side rate limiting (เช่น Facebook API จำกัดเอง)
-      if (res.status === 429) {
-        const secs = data.secondsLeft ?? 600;
-        const minutes = Math.floor(secs / 60);
-        const seconds = secs % 60;
-        toast.info(
-          isThai
-            ? `ใช้ข้อมูลล่าสุด (ซิงค์ใหม่ได้อีกครั้งใน ${minutes} นาที ${seconds} วินาที)`
-            : `Cached data used (Sync again in ${minutes}m ${seconds}s)`
-        );
-        // reloadManagerAccounts(false); // don't call status check if we are 429ed
-        return;
-      }
-
-      if (!res.ok || data.error) {
+      if (!res.ok) {
         throw new Error(data.error || "ไม่สามารถดึงบัญชีจาก Facebook ได้");
       }
 
-      const accountsFromFb: { id: string; accountId: string; name: string; status?: number }[] =
-        data.accounts ?? [];
-      if (!accountsFromFb.length) {
-        toast.info("ไม่พบบัญชีโฆษณาใน Facebook");
-        return;
-      }
-
-      // เก็บสถานะจาก Facebook ไว้ในแผนที่
-      const statusMap: Record<string, number> = {};
-      for (const acc of accountsFromFb) {
-        if (typeof acc.status === "number") {
-          statusMap[acc.id] = acc.status;
-          statusMap[acc.accountId] = acc.status;
+      if (!silent) {
+        if (data.rateLimited && typeof data.secondsLeft === "number") {
+          const secs = data.secondsLeft;
+          const minutes = Math.floor(secs / 60);
+          const seconds = secs % 60;
+          toast.info(
+            isThai
+              ? `ใช้ข้อมูลล่าสุด (ซิงค์ใหม่ได้อีกครั้งใน ${minutes} นาที ${seconds} วินาที)`
+              : `Cached data used (Sync again in ${minutes}m ${seconds}s)`
+          );
+        } else if (!data.rateLimited) {
+          toast.success(isThai ? "ดึงบัญชีจาก Facebook และอัปเดตเรียบร้อย" : "Ad accounts synced");
         }
       }
-      setFbStatuses(statusMap);
 
-      // สร้าง / อัปเดต ManagerAccount สำหรับทุก account
-      await Promise.all(
-        accountsFromFb.map((acc) =>
-          fetch("/api/manager-accounts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              accountId: acc.id,
-              name: acc.name,
-              platform: "facebook",
-            }),
-          }).catch(() => null)
-        )
-      );
-
-      // โหลดรายการที่ sync แล้วกลับมาแสดง
-      const after = await fetch("/api/manager-accounts");
-      const afterData = await after.json();
-      if (Array.isArray(afterData)) {
-        setAccounts(afterData);
+      if (Array.isArray(data.accounts)) {
+        setAccounts(data.accounts);
         setAccountsPage(1);
       }
 
-      localStorage.setItem("lastFbSyncTime", Date.now().toString());
-      toast.success("ดึงบัญชีจาก Facebook และอัปเดตเรียบร้อย");
+      // อัปเดตสถานะจาก Facebook สำหรับแสดง badge (ไม่ sync)
+      try {
+        const fbRes = await fetch("/api/facebook/ad-accounts");
+        const fbData = await fbRes.json();
+        if (fbRes.ok && Array.isArray(fbData.accounts)) {
+          const map: Record<string, number> = {};
+          fbData.accounts.forEach((acc: { id: string; accountId: string; status?: number }) => {
+            if (typeof acc.status === "number") {
+              map[acc.id] = acc.status;
+              map[acc.accountId] = acc.status;
+            }
+          });
+          setFbStatuses(map);
+        }
+      } catch { /* ignore */ }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "ไม่สามารถดึงบัญชีจาก Facebook ได้");
     } finally {
@@ -651,6 +633,8 @@ function SettingsContent() {
       });
       if (!res.ok) throw new Error("Failed");
       setFbConnections((prev) => prev.filter((c) => c.id !== id));
+      // ถ้าเป็นบัญชี Facebook บัญชีสุดท้าย backend จะลบ ManagerAccount + FacebookPage ให้แล้ว — โหลดรายการใหม่
+      await Promise.all([reloadManagerAccounts(), reloadFacebookPages()]);
       toast.success(isThai ? "ยกเลิกการเชื่อมต่อ Facebook แล้ว" : "Facebook disconnected");
     } catch {
       toast.error(isThai ? "เกิดข้อผิดพลาด" : "Failed to disconnect");
@@ -659,32 +643,38 @@ function SettingsContent() {
     }
   };
 
+  // โหลดเมื่อเปลี่ยนแท็บ — ถ้าเชื่อม Facebook แล้ว ให้ sync จาก FB ทันที (ไม่ต้องกดรีเฟรช)
+  const lastLoadedKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (!session?.user?.id) return;
+    const key = `${activeTab}:${hasFacebook}`;
+    if (lastLoadedKeyRef.current === key) return;
+    lastLoadedKeyRef.current = key;
 
     if (activeTab === "connections") {
-      reloadFbConnections();
+      reloadFbConnections().then(() => updateSession());
       return;
     }
-    // Manager Accounts: มี Facebook = ดึงจาก Facebook เลยครั้งเดียว (ไม่โหลดจาก DB ก่อนแล้วค่อย sync)
     if (activeTab === "manager-accounts") {
       if (hasFacebook) {
-        syncManagerAccountsFromFacebook().finally(() => reloadManagerAccounts());
+        reloadManagerAccounts();
+        syncManagerAccountsFromFacebook(true);
       } else {
         reloadManagerAccounts();
       }
       return;
     }
-    // Facebook Pages: มี Facebook = ดึงจาก Facebook เลยครั้งเดียว
     if (activeTab === "facebook-pages") {
       if (hasFacebook) {
-        syncFacebookPages().finally(() => reloadFacebookPages());
+        reloadFacebookPages();
+        syncFacebookPages(true);
       } else {
         reloadFacebookPages();
       }
       return;
     }
-  }, [activeTab, session?.user?.id, hasFacebook, reloadManagerAccounts, reloadFacebookPages, reloadFbConnections, syncManagerAccountsFromFacebook, syncFacebookPages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, session?.user?.id, hasFacebook]);
 
   useEffect(() => {
     setAccountsPage(1);
@@ -796,46 +786,34 @@ function SettingsContent() {
     }
   };
 
-  async function syncFacebookPages() {
+  // silent = true ตอนเปิดแท็บ (ไม่แสดง toast คูลดาวน์/สำเร็จ)
+  async function syncFacebookPages(silent = false) {
     setSyncingPages(true);
     try {
-      const res = await fetch("/api/facebook/pages?sync=true");
+      const res = await fetch("/api/facebook/sync/pages", { method: "POST" });
       const data = await res.json();
 
-      // Handle server-side rate limiting
-      if (res.status === 429) {
-        const secs = data.secondsLeft ?? 600;
-        const minutes = Math.floor(secs / 60);
-        const seconds = secs % 60;
-        toast.info(
-          isThai
-            ? `ใช้ข้อมูลล่าสุด (ซิงค์ใหม่ได้อีกครั้งใน ${minutes} นาที ${seconds} วินาที)`
-            : `Cached data used (Sync again in ${minutes}m ${seconds}s)`
-        );
-        reloadFacebookPages();
-        return;
+      if (!res.ok) throw new Error(data.error || "Failed to sync pages");
+
+      if (!silent) {
+        if (data.rateLimited && typeof data.secondsLeft === "number") {
+          const secs = data.secondsLeft;
+          const minutes = Math.floor(secs / 60);
+          const seconds = secs % 60;
+          toast.info(
+            isThai
+              ? `ใช้ข้อมูลล่าสุด (ซิงค์ใหม่ได้อีกครั้งใน ${minutes} นาที ${seconds} วินาที)`
+              : `Cached data used (Sync again in ${minutes}m ${seconds}s)`
+          );
+        } else if (!data.rateLimited) {
+          toast.success(isThai ? "ดึงเพจจาก Facebook เรียบร้อย" : "Pages synced successfully");
+        }
       }
 
-      if (!res.ok || data.error) throw new Error(data.error || "Failed to fetch pages");
-
-      const pagesFromFb: { id: string; name: string; username?: string | null; pageStatus?: string | null; pictureUrl?: string | null }[] = data.pages ?? [];
-      if (!pagesFromFb.length) {
-        toast.info(isThai ? "ไม่พบเพจใน Facebook" : "No pages found on Facebook");
-        return;
+      if (Array.isArray(data.pages)) {
+        setFbPages(data.pages);
+        setPagesPage(1);
       }
-
-      await Promise.all(
-        pagesFromFb.map((page) =>
-          fetch("/api/facebook-pages", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pageId: page.id, name: page.name, username: page.username, pageStatus: page.pageStatus, pictureUrl: page.pictureUrl }),
-          }).catch(() => null)
-        )
-      );
-
-      await reloadFacebookPages();
-      toast.success(isThai ? "ดึงเพจจาก Facebook เรียบร้อย" : "Pages synced successfully");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to sync pages");
     } finally {
@@ -1309,7 +1287,7 @@ function SettingsContent() {
                         variant="outline"
                         size="sm"
                         className="h-8 px-3 text-xs"
-                        onClick={syncManagerAccountsFromFacebook}
+                        onClick={() => syncManagerAccountsFromFacebook()}
                         disabled={accountsLoading || syncingFbAccounts}
                       >
                         <Loader2
@@ -2449,7 +2427,7 @@ function SettingsContent() {
                         variant="outline"
                         size="sm"
                         className="h-8 px-3 text-xs"
-                        onClick={syncFacebookPages}
+                        onClick={() => syncFacebookPages()}
                         disabled={pagesLoading || syncingPages}
                       >
                         <Loader2 className={cn("w-3 h-3 mr-1 text-gray-500", (pagesLoading || syncingPages) && "animate-spin")} />

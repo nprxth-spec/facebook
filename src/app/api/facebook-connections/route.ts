@@ -79,5 +79,19 @@ export async function DELETE(req: Request) {
     if (!account) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     await prisma.account.delete({ where: { id } });
+
+    // ถ้าไม่มี Facebook เชื่อมต่อเหลืออยู่ → ลบข้อมูลที่ sync มาจาก Facebook ด้วย (บัญชีโฆษณา + เพจ)
+    const remainingFb = await prisma.account.count({
+        where: { userId: session.user.id, provider: "facebook" },
+    });
+    if (remainingFb === 0) {
+        await prisma.managerAccount.deleteMany({ where: { userId: session.user.id } });
+        await prisma.facebookPage.deleteMany({ where: { userId: session.user.id } });
+        await prisma.user.update({
+            where: { id: session.user.id },
+            data: { lastFbAccountsSyncAt: null, lastFbPagesSyncAt: null },
+        });
+    }
+
     return NextResponse.json({ success: true });
 }
