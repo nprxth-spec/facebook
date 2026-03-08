@@ -83,26 +83,47 @@ export async function POST(req: Request) {
       return true;
     });
 
+    // โหลดบัญชีที่มีอยู่ครั้งเดียว (แทนการ findFirst ทีละบัญชี)
+    const existingList = await prisma.managerAccount.findMany({
+      where: { userId },
+      select: { id: true, accountId: true },
+    });
+    const byAccountId = new Map(existingList.map((e) => [e.accountId, e]));
+
+    const toCreate: { userId: string; accountId: string; name: string; platform: string; isActive: boolean }[] = [];
+    const toUpdate: { id: string; name: string }[] = [];
+
     for (const acc of fromFb) {
-      const existing = await prisma.managerAccount.findFirst({
-        where: { userId, accountId: acc.id },
-      });
+      const existing = byAccountId.get(acc.id);
       if (existing) {
-        await prisma.managerAccount.update({
-          where: { id: existing.id },
-          data: { name: acc.name, platform: "facebook" },
-        });
+        toUpdate.push({ id: existing.id, name: acc.name });
       } else {
-        await prisma.managerAccount.create({
-          data: {
-            userId,
-            accountId: acc.id,
-            name: acc.name,
-            platform: "facebook",
-            isActive: false,
-          },
+        toCreate.push({
+          userId,
+          accountId: acc.id,
+          name: acc.name,
+          platform: "facebook",
+          isActive: false,
         });
       }
+    }
+
+    if (toCreate.length > 0) {
+      await prisma.managerAccount.createMany({
+        data: toCreate,
+        skipDuplicates: true,
+      });
+    }
+
+    if (toUpdate.length > 0) {
+      await Promise.all(
+        toUpdate.map(({ id, name }) =>
+          prisma.managerAccount.update({
+            where: { id },
+            data: { name, platform: "facebook" },
+          })
+        )
+      );
     }
 
     await prisma.user.update({
