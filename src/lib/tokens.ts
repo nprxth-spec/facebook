@@ -32,14 +32,35 @@ export async function getGoogleClient(userId: string) {
 
   // Auto-refresh ถ้า token หมดอายุ และอัปเดตใน DB
   oauth2.on("tokens", async (tokens) => {
-    if (tokens.access_token) {
-      await prisma.account.updateMany({
-        where: { userId, provider: "google" },
-        data: {
-          access_token: tokens.access_token,
-          expires_at: tokens.expiry_date ? Math.floor(tokens.expiry_date / 1000) : undefined,
-        },
-      });
+    try {
+      const updateData: {
+        access_token?: string | null;
+        refresh_token?: string | null;
+        expires_at?: number | null;
+      } = {};
+
+      if (tokens.access_token) {
+        updateData.access_token = tokens.access_token;
+      }
+
+      if (tokens.refresh_token) {
+        // บางครั้ง Google จะ rotate refresh token ใหม่ให้
+        // ถ้าเราไม่บันทึกตัวใหม่ ตัวเก่าจะใช้ไม่ได้และทำให้เกิด invalid_grant
+        updateData.refresh_token = tokens.refresh_token;
+      }
+
+      if (typeof tokens.expiry_date === "number") {
+        updateData.expires_at = Math.floor(tokens.expiry_date / 1000);
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await prisma.account.updateMany({
+          where: { userId, provider: "google" },
+          data: updateData,
+        });
+      }
+    } catch (e) {
+      console.error("Failed to persist Google tokens", e);
     }
   });
 
