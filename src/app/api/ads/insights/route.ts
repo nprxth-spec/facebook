@@ -1,11 +1,23 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getFacebookToken } from "@/lib/tokens";
+import { getAllFacebookTokens } from "@/lib/tokens";
 import { NextResponse } from "next/server";
 import { cacheGet, cacheSet } from "@/lib/cache";
 import { runWithConcurrency } from "@/lib/concurrency";
 
 const FB_API = "https://graph.facebook.com/v19.0";
+
+function isMissingAdsPermissionError(err: unknown) {
+  const message = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  const code = (err as any)?.code;
+  return (
+    code === 200 ||
+    /Ad account owner has NOT grant/i.test(message) ||
+    /ads_management or ads_read/i.test(message) ||
+    /ads_management/i.test(message) ||
+    /ads_read/i.test(message)
+  );
+}
 
 interface AdsInsightsQuery {
   from?: string;
@@ -29,8 +41,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const token = await getFacebookToken(session.user.id);
-  if (!token) {
+  const fbTokens = await getAllFacebookTokens(session.user.id);
+  if (!fbTokens.length) {
     return NextResponse.json({ error: "Facebook account not connected" }, { status: 400 });
   }
 
@@ -113,33 +125,60 @@ export async function GET(req: Request) {
           `insights.time_range(${timeRange}){impressions,clicks,spend,cost_per_result,objective,actions}`,
         ].join(",");
 
-        let url: string | null = `${FB_API}/${accountPath}/ads?fields=${encodeURIComponent(fields)}&limit=100&access_token=${token}`;
+        let lastErr: unknown = null;
+        let fetched = false;
 
-        while (url) {
-          const res = await fetch(url);
-          const data: any = await res.json();
-          if (data.error) throw new Error(data.error.message);
+        // Try each token until we find one that is granted for this ad account.
+        for (const { token } of fbTokens) {
+          const adsForToken: any[] = [];
+          let url: string | null = `${FB_API}/${accountPath}/ads?fields=${encodeURIComponent(fields)}&limit=100&access_token=${token}`;
 
-          const chunk = (data.data ?? []).map((ad: any) => {
-            // Flatten insights array into the ad root object for the dashboard mapper
-            const insight = ad.insights?.data?.[0] || {};
-            return {
-              ...ad,
-              impressions: insight.impressions,
-              clicks: insight.clicks,
-              spend: insight.spend,
-              cost_per_result: insight.cost_per_result,
-              objective: insight.objective,
-              actions: insight.actions,
-              _accountName: acc.name,
-              // Map 'id' to 'ad_id' and 'name' to 'ad_name' so old mapping works
-              ad_id: ad.id,
-              ad_name: ad.name,
-              account_id: acc.accountId,
-            };
-          });
-          allAds.push(...chunk);
-          url = data.paging?.next ?? null;
+          try {
+            while (url) {
+              const res = await fetch(url);
+              const data: any = await res.json();
+              if (data.error) {
+                const e = new Error(data.error.message ?? "Facebook API error") as any;
+                e.code = data.error.code;
+                throw e;
+              }
+
+              const chunk = (data.data ?? []).map((ad: any) => {
+                // Flatten insights array into the ad root object for the dashboard mapper
+                const insight = ad.insights?.data?.[0] || {};
+                return {
+                  ...ad,
+                  impressions: insight.impressions,
+                  clicks: insight.clicks,
+                  spend: insight.spend,
+                  cost_per_result: insight.cost_per_result,
+                  objective: insight.objective,
+                  actions: insight.actions,
+                  _accountName: acc.name,
+                  // Map 'id' to 'ad_id' and 'name' to 'ad_name' so old mapping works
+                  ad_id: ad.id,
+                  ad_name: ad.name,
+                  account_id: acc.accountId,
+                };
+              });
+              adsForToken.push(...chunk);
+              url = data.paging?.next ?? null;
+            }
+
+            allAds.push(...adsForToken);
+            fetched = true;
+            break;
+          } catch (err) {
+            lastErr = err;
+            if (!isMissingAdsPermissionError(err)) {
+              // If it's not a permission issue, don't waste time trying other tokens.
+              break;
+            }
+          }
+        }
+
+        if (!fetched && lastErr) {
+          console.error("FB ads batch fetch failed for account", acc.accountId, lastErr);
         }
       } catch (err) {
         console.error("FB ads batch fetch error for account", acc.accountId, err);

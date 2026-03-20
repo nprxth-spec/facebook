@@ -8,6 +8,18 @@ import { prisma } from "@/lib/db";
 const FB_API = "https://graph.facebook.com/v19.0";
 const SKIP_COL = "__skip__";
 
+function isMissingAdsPermissionError(err: unknown) {
+    const message = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+    const code = (err as any)?.code;
+    return (
+        code === 200 ||
+        /Ad account owner has NOT grant/i.test(message) ||
+        /ads_management or ads_read/i.test(message) ||
+        /ads_management/i.test(message) ||
+        /ads_read/i.test(message)
+    );
+}
+
 interface ColumnMapping { fbCol: string; sheetCol: string }
 
 interface ExportAdsRequest {
@@ -66,8 +78,16 @@ async function fetchAdsInfo(
 
     while (url) {
         const res = await fetch(url);
-        const data: { data?: Record<string, unknown>[]; error?: { message: string }; paging?: { next?: string } } = await res.json();
-        if (data.error) throw new Error(data.error.message);
+        const data: {
+            data?: Record<string, unknown>[];
+            error?: { message: string; code?: number | string };
+            paging?: { next?: string };
+        } = await res.json();
+        if (data.error) {
+            const e = new Error(data.error.message ?? "Facebook API error") as any;
+            e.code = data.error.code;
+            throw e;
+        }
         const chunk = (data.data ?? []).map(ad => ({ ...ad, _account_name: accountName }));
         rows = rows.concat(chunk);
         url = data.paging?.next ?? null;
@@ -275,14 +295,27 @@ export async function POST(req: Request) {
             }
         }
         for (const accountId of adAccountIds) {
-            // หา token ที่ตรงกับ account นี้ หรือใช้ token แรกที่มี
-            const token = fbTokens[0].token;
             const accountNameFromDb = accountNameMap.get(accountId);
-            try {
-                const ads = await fetchAdsInfo(accountId, token, accountNameFromDb);
-                allAds.push(...ads);
-            } catch (e) {
-                console.warn(`[export-ads] Failed to fetch ads for ${accountId}:`, e);
+            let lastErr: unknown = null;
+            let fetched = false;
+
+            // Try each token until we find one that is granted for this ad account.
+            for (const { token } of fbTokens) {
+                try {
+                    const ads = await fetchAdsInfo(accountId, token, accountNameFromDb);
+                    allAds.push(...ads);
+                    fetched = true;
+                    break;
+                } catch (e) {
+                    lastErr = e;
+                    if (!isMissingAdsPermissionError(e)) {
+                        break;
+                    }
+                }
+            }
+
+            if (!fetched && lastErr) {
+                console.warn(`[export-ads] Failed to fetch ads for ${accountId}:`, lastErr);
             }
         }
 
