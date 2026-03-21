@@ -222,8 +222,22 @@ export async function GET(req: Request) {
         const pUrl = new URL(`${FB_API}`);
         pUrl.searchParams.set("ids", chunk.join(","));
         pUrl.searchParams.set("fields", "name,username");
-        pUrl.searchParams.set("access_token", token);
-        fbChunks.push(fetch(pUrl.toString()).then((r) => r.json()).catch(() => null));
+        // Try multiple tokens because a token might not have ads/page grant for some cases.
+        fbChunks.push(
+          (async () => {
+            for (const { token } of fbTokens) {
+              try {
+                pUrl.searchParams.set("access_token", token);
+                const r = await fetch(pUrl.toString());
+                const d = await r.json();
+                if (d && !d.error) return d;
+              } catch {
+                // try next token
+              }
+            }
+            return null;
+          })()
+        );
       }
       const results = await Promise.all(fbChunks);
       results.forEach((d) => { if (d && !d.error) Object.assign(pagesData, d); });
