@@ -46,6 +46,34 @@ export function explainApiError(raw: string | null | undefined): ExplainedError 
   const msg = (raw ?? "").trim();
   const lower = msg.toLowerCase();
 
+  // ── Facebook: account checkpoint / must complete steps on facebook.com ──
+  if (
+    /cannot access the app till you log in/i.test(msg) ||
+    /cannot access the app until you log in/i.test(msg) ||
+    (/follow the instructions given/i.test(msg) && /facebook\.com/i.test(lower))
+  ) {
+    return {
+      titleTh: "Facebook ขอให้แก้สถานะบัญชีก่อน",
+      titleEn: "Facebook requires action on your account",
+      causeTh:
+        "Meta บล็อกการใช้แอปชั่วคราวจนกว่าคุณจะเข้า facebook.com ด้วยบัญชีนี้แล้วทำขั้นตอนที่ขึ้น (เช่น ยืนยันตัวตน ความปลอดภัย หรือข้อกำหนดอื่นของ Facebook)",
+      causeEn:
+        "Meta is blocking app access until you log in at facebook.com with this account and complete any prompts (security check, identity verification, etc.).",
+      stepsTh: [
+        "เปิด https://www.facebook.com ในเบราว์เซอร์ (หรือแอป) แล้วล็อกอินด้วยบัญชีเดียวกับที่ใช้เชื่อมแอป",
+        "ทำทุกขั้นตอนที่ Facebook แสดงจนเข้าใช้งานได้ปกติ ไม่มีหน้าเตือนค้าง",
+        "จากนั้นกลับมาที่แอป → ตั้งค่า → เชื่อมต่อ Facebook ใหม่ (ยกเลิกแล้วเชื่อมใหม่)",
+        "ถ้าแอปอยู่โหมด Development ให้แน่ใจว่าบัญชีนี้อยู่ใน Roles (Tester/Developer) ของแอปใน Meta Developer",
+      ],
+      stepsEn: [
+        "Open https://www.facebook.com and log in with the same Facebook account you use for this app.",
+        "Complete every on-screen step until your account works normally with no blocking prompts.",
+        "Return to this app → Settings → disconnect and reconnect Facebook.",
+        "If the app is in Development mode, ensure this user is added under App Roles in Meta Developer.",
+      ],
+    };
+  }
+
   // ── Meta / Facebook Marketing API ──
   if (
     /ad account owner has not grant/i.test(msg) ||
