@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { getFacebookToken, getGoogleClient } from "@/lib/tokens";
+import { getAllFacebookTokens, getGoogleClient } from "@/lib/tokens";
 import { NextResponse } from "next/server";
 import { runExportTask } from "@/lib/export-service";
 import { prisma } from "@/lib/db";
@@ -53,8 +53,9 @@ export async function POST(req: Request) {
   if (!columnMapping?.length) return NextResponse.json({ error: "No column mapping" }, { status: 400 });
   if (!dataDate) return NextResponse.json({ error: "No data date" }, { status: 400 });
 
-  const fbToken = await getFacebookToken(session.user.id);
-  if (!fbToken) return NextResponse.json({ error: "Facebook not connected" }, { status: 400 });
+  const fbAccounts = await getAllFacebookTokens(session.user.id);
+  if (!fbAccounts.length) return NextResponse.json({ error: "Facebook not connected" }, { status: 400 });
+  const fbTokens = fbAccounts.map((a) => a.token);
 
   const oauth2Client = await getGoogleClient(session.user.id);
   if (!oauth2Client) return NextResponse.json({ error: "Google not connected" }, { status: 400 });
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
 
     const result = await runExportTask({
       userId: session.user.id,
-      fbToken,
+      fbTokens,
       oauth2Client,
       adAccountIds,
       googleSheetId,

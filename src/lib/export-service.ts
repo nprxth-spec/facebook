@@ -48,7 +48,8 @@ import type { OAuth2Client } from "google-auth-library";
 
 export interface ExportServiceOptions {
     userId: string;
-    fbToken: string;
+    /** All Facebook user tokens linked to this app user (try in order per ad account). */
+    fbTokens: string[];
     oauth2Client: OAuth2Client;
     adAccountIds: string[];
     googleSheetId: string;
@@ -72,6 +73,18 @@ const MAX_EXPORT_DAYS_SINGLE_REQUEST =
 
 const FB_EXPORT_CONCURRENCY =
     Number.parseInt(process.env.FB_EXPORT_CONCURRENCY || "3") || 3;
+
+function isMissingAdsPermissionError(err: unknown) {
+    const message = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+    const code = (err as { code?: number | string })?.code;
+    return (
+        code === 200 ||
+        /Ad account owner has NOT grant/i.test(message) ||
+        /ads_management or ads_read/i.test(message) ||
+        /ads_management/i.test(message) ||
+        /ads_read/i.test(message)
+    );
+}
 
 function colLetterToIndex(letter: string): number {
     let result = 0;
@@ -120,15 +133,41 @@ async function fetchFbInsights(
         const fbRes = await fetch(url);
         const fbData: {
             data?: Record<string, string>[];
-            error?: { message: string };
+            error?: { message: string; code?: number | string };
             paging?: { next?: string };
         } = await fbRes.json();
-        if (fbData.error) throw new Error(fbData.error.message);
+        if (fbData.error) {
+            const e = new Error(fbData.error.message ?? "Facebook API error") as Error & { code?: number | string };
+            e.code = fbData.error.code;
+            throw e;
+        }
         rows = rows.concat(fbData.data ?? []);
         url = fbData.paging?.next ?? null;
     }
 
     return rows;
+}
+
+async function fetchFbInsightsWithTokens(
+    accountId: string,
+    tokens: string[],
+    since: string,
+    until: string,
+    fields: string[]
+): Promise<Record<string, string>[]> {
+    let lastErr: unknown = null;
+    for (const token of tokens) {
+        try {
+            return await fetchFbInsights(accountId, token, since, until, fields);
+        } catch (err) {
+            lastErr = err;
+            if (!isMissingAdsPermissionError(err)) {
+                throw err;
+            }
+        }
+    }
+    if (lastErr instanceof Error) throw lastErr;
+    throw new Error("Facebook insights fetch failed: no valid token");
 }
 
 function sumActionArray(row: Record<string, unknown>, fieldName: string): number {
@@ -248,11 +287,15 @@ function mapRowToSheetRow(
  */
 export async function runExportTask(options: ExportServiceOptions) {
     const {
-        userId, fbToken, oauth2Client, adAccountIds, googleSheetId,
+        userId, fbTokens, oauth2Client, adAccountIds, googleSheetId,
         sheetTab, columnMapping, writeMode, dataDate, dateRange = "today",
         configId, configName, exportType = "manual", timezone = "Asia/Bangkok",
         ip, userAgent, sourcePath,
     } = options;
+
+    if (!fbTokens?.length) {
+        throw new Error("Facebook not connected");
+    }
 
     let since: string;
     let until: string;
@@ -351,9 +394,9 @@ export async function runExportTask(options: ExportServiceOptions) {
             FB_EXPORT_CONCURRENCY,
             async (accountId) => {
                 for (const chunk of dateChunks) {
-                    const rows = await fetchFbInsights(
+                    const rows = await fetchFbInsightsWithTokens(
                         accountId,
-                        fbToken,
+                        fbTokens,
                         chunk.since,
                         chunk.until,
                         fbFields

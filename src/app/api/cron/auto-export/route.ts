@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { runExportTask } from "@/lib/export-service";
-import { getFacebookToken, getGoogleClient } from "@/lib/tokens";
+import { getAllFacebookTokens, getGoogleClient } from "@/lib/tokens";
 import { format } from "date-fns";
 
 // Secret token for cron job to prevent unauthorized access
@@ -122,13 +122,14 @@ export async function GET(req: Request) {
             await Promise.all(
                 batch.map(async (config) => {
                     try {
-                        const fbToken = await getFacebookToken(config.userId);
+                        const fbAccounts = await getAllFacebookTokens(config.userId);
                         const oauth2Client = await getGoogleClient(config.userId);
 
-                        if (!fbToken || !oauth2Client) {
+                        if (!fbAccounts.length || !oauth2Client) {
                             errors.push(`"${config.name}": Missing tokens`);
                             return;
                         }
+                        const fbTokens = fbAccounts.map((a) => a.token);
 
                         const userTimezone = config.user.preferences?.timezone || "Asia/Bangkok";
                         const columnMapping = config.columnMapping as Array<{ fbCol: string; sheetCol: string }>;
@@ -142,7 +143,7 @@ export async function GET(req: Request) {
 
                         await runExportTask({
                             userId: config.userId,
-                            fbToken,
+                            fbTokens,
                             oauth2Client,
                             adAccountIds: config.adAccountIds,
                             googleSheetId: config.googleSheetId,
