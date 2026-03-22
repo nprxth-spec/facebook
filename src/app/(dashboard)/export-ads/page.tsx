@@ -11,6 +11,8 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTheme } from "@/components/providers/ThemeProvider";
+import { ErrorExplanationDialog } from "@/components/ErrorExplanationDialog";
+import { explainApiError } from "@/lib/explain-api-error";
 
 // ────────────────── Types ──────────────────
 interface AdAccount { id: string; accountId: string; name: string; isActive: boolean; currency?: string }
@@ -276,6 +278,8 @@ export default function ExportAdsPage() {
 
     // Export
     const [isExporting, setIsExporting] = useState(false);
+    const [apiErrorOpen, setApiErrorOpen] = useState(false);
+    const [apiErrorRaw, setApiErrorRaw] = useState("");
 
     // ── Load accounts ──
     useEffect(() => {
@@ -344,7 +348,16 @@ export default function ExportAdsPage() {
                     : `Exported ${data.rowCount} rows${data.updated ? ` (updated ${data.updated} statuses)` : ""}`
             );
         } catch (err: unknown) {
-            toast.error((err instanceof Error ? err.message : undefined) ?? "Export failed");
+            const raw =
+                err instanceof Error
+                    ? err.message
+                    : isThai
+                        ? "เกิดข้อผิดพลาด"
+                        : "Export failed";
+            setApiErrorRaw(raw);
+            setApiErrorOpen(true);
+            const expl = explainApiError(raw);
+            toast.error(isThai ? expl.titleTh : expl.titleEn);
         } finally {
             setIsExporting(false);
         }
@@ -352,6 +365,12 @@ export default function ExportAdsPage() {
 
     return (
         <div className="p-6 max-w-4xl mx-auto space-y-6">
+            <ErrorExplanationDialog
+                open={apiErrorOpen}
+                onOpenChange={setApiErrorOpen}
+                rawMessage={apiErrorRaw}
+                isThai={isThai}
+            />
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">

@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { ErrorExplanationDialog } from "@/components/ErrorExplanationDialog";
+import { explainApiError } from "@/lib/explain-api-error";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
 import { th, enUS } from "date-fns/locale";
 import { useTheme } from "@/components/providers/ThemeProvider";
@@ -662,6 +664,8 @@ export default function ExportPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showCal, setShowCal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [apiErrorOpen, setApiErrorOpen] = useState(false);
+  const [apiErrorRaw, setApiErrorRaw] = useState("");
   const calRef = useRef<HTMLDivElement>(null);
 
   const { language, t } = useTheme();
@@ -867,13 +871,16 @@ export default function ExportPage() {
           : `Export successful! ${data.rowCount.toLocaleString()} rows`,
       );
     } catch (e: unknown) {
-      toast.error(
+      const raw =
         e instanceof Error
           ? e.message
           : isThai
             ? "เกิดข้อผิดพลาด"
-            : "An error occurred",
-      );
+            : "An error occurred";
+      setApiErrorRaw(raw);
+      setApiErrorOpen(true);
+      const expl = explainApiError(raw);
+      toast.error(isThai ? expl.titleTh : expl.titleEn);
     } finally {
       setIsExporting(false);
     }
@@ -1482,6 +1489,12 @@ export default function ExportPage() {
 
         </div>
       </div>
+      <ErrorExplanationDialog
+        open={apiErrorOpen}
+        onOpenChange={setApiErrorOpen}
+        rawMessage={apiErrorRaw}
+        isThai={isThai}
+      />
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
         <DialogContent className="max-w-[400px] p-0 overflow-hidden rounded-xl border-none shadow-2xl">
           <div className="p-5 flex items-start gap-4">

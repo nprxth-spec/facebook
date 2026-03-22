@@ -28,6 +28,8 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useTheme } from "@/components/providers/ThemeProvider";
+import { ErrorExplanationDialog } from "@/components/ErrorExplanationDialog";
+import { explainApiError } from "@/lib/explain-api-error";
 import {
   Popover,
   PopoverContent,
@@ -540,6 +542,8 @@ export default function AdsPage() {
     cpr: true,
   });
   const [updatingIds, setUpdatingIds] = useState<string[]>([]);
+  const [apiErrorOpen, setApiErrorOpen] = useState(false);
+  const [apiErrorRaw, setApiErrorRaw] = useState("");
   const [dropdownMounted, setDropdownMounted] = useState(false);
 
   useEffect(() => {
@@ -654,6 +658,8 @@ export default function AdsPage() {
 
   const hasMounted = useRef(false);
   const calRef = useRef<HTMLDivElement | null>(null);
+  /** Dedupe dialog/toast when /insights is polled often (search/filters) */
+  const lastAdsFetchErrorKey = useRef<string>("");
 
   const [managerAccounts, setManagerAccounts] = useState<{ id: string; name: string }[]>([]);
 
@@ -811,13 +817,16 @@ export default function AdsPage() {
           row.id === ad.id ? { ...row, status: ad.status } : row
         )
       );
-      toast.error(
+      const raw =
         e instanceof Error
           ? e.message
           : isThai
-          ? "อัปเดตสถานะไม่สำเร็จ"
-          : "Failed to update status"
-      );
+            ? "อัปเดตสถานะไม่สำเร็จ"
+            : "Failed to update status";
+      setApiErrorRaw(raw);
+      setApiErrorOpen(true);
+      const expl = explainApiError(raw);
+      toast.error(isThai ? expl.titleTh : expl.titleEn);
     } finally {
       setUpdatingIds((prev) => prev.filter((id) => id !== ad.id));
     }
@@ -862,15 +871,46 @@ export default function AdsPage() {
       const res = await fetch(`/api/ads/insights?${params.toString()}`);
       const data = await res.json();
       if (res.ok) {
+        lastAdsFetchErrorKey.current = "";
         const list: AdRow[] = Array.isArray(data.ads) ? data.ads : [];
         setAds(list);
       } else {
-        console.error(data.error || "Failed to load ads");
+        const errMsg =
+          typeof data?.error === "string" && data.error.trim()
+            ? data.error
+            : isThai
+              ? "โหลดข้อมูลโฆษณาไม่สำเร็จ"
+              : "Failed to load ads";
+        console.error(data?.error ?? errMsg);
         setAds([]);
+        const key = errMsg.slice(0, 240);
+        const isNewKey = lastAdsFetchErrorKey.current !== key;
+        lastAdsFetchErrorKey.current = key;
+        setApiErrorRaw(errMsg);
+        if (isNewKey || forceRefresh) {
+          setApiErrorOpen(true);
+          const expl = explainApiError(errMsg);
+          toast.error(isThai ? expl.titleTh : expl.titleEn);
+        }
       }
     } catch (err) {
       console.error(err);
       setAds([]);
+      const raw =
+        err instanceof Error
+          ? err.message
+          : isThai
+            ? "โหลดข้อมูลไม่สำเร็จ"
+            : "Failed to load data";
+      const key = raw.slice(0, 240);
+      const isNewKey = lastAdsFetchErrorKey.current !== key;
+      lastAdsFetchErrorKey.current = key;
+      setApiErrorRaw(raw);
+      if (isNewKey || forceRefresh) {
+        setApiErrorOpen(true);
+        const expl = explainApiError(raw);
+        toast.error(isThai ? expl.titleTh : expl.titleEn);
+      }
     } finally {
       setLoading(false);
     }
@@ -893,6 +933,12 @@ export default function AdsPage() {
 
   return (
     <div className="space-y-4 mt-3 sm:mt-5">
+      <ErrorExplanationDialog
+        open={apiErrorOpen}
+        onOpenChange={setApiErrorOpen}
+        rawMessage={apiErrorRaw}
+        isThai={isThai}
+      />
       <Card>
         {/* ── Filter section ── */}
         <div className="px-6 pt-4 pb-4 border-b border-gray-100 dark:border-gray-800">
