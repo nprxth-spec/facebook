@@ -10,6 +10,11 @@ export type ExplainedError = {
   causeEn: string;
   stepsTh: string[];
   stepsEn: string[];
+  /**
+   * Optional UI action hint for ErrorExplanationDialog.
+   * Helps avoid asking the user to manually disconnect/reconnect.
+   */
+  actionKind?: "reconnect_google";
 };
 
 const UNKNOWN_TH = "เกิดข้อผิดพลาด";
@@ -156,6 +161,7 @@ export function explainApiError(raw: string | null | undefined): ExplainedError 
       causeEn: "Google authorization expired or was revoked.",
       stepsTh: ["ไปที่การตั้งค่า → เชื่อมต่อ Google ใหม่"],
       stepsEn: ["Reconnect Google in Settings."],
+      actionKind: "reconnect_google",
     };
   }
 

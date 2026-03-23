@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { signIn } from "next-auth/react";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +33,21 @@ export function ErrorExplanationDialog({
   const rawLabel = isThai ? "รายละเอียดจากระบบ" : "Technical details";
   const whatToDo = isThai ? "ควรทำอย่างไร" : "What to try";
   const closeLabel = isThai ? "ปิด" : "Close";
+  const reconnectLabel = isThai ? "เชื่อมต่อ Google ใหม่" : "Reconnect Google";
+  const [reconnecting, setReconnecting] = useState(false);
+
+  const handleReconnectGoogle = async () => {
+    setReconnecting(true);
+    try {
+      // Clear stored refresh token so next OAuth flow will mint a fresh one.
+      await fetch("/api/google-connections", { method: "DELETE" });
+      await signIn("google", { callbackUrl: "/settings?tab=connections" });
+    } catch {
+      // If reconnect fails, keep the dialog open so user can read details.
+      setReconnecting(false);
+      throw new Error("Failed to reconnect Google");
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -60,6 +77,16 @@ export function ErrorExplanationDialog({
           )}
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
+          {expl.actionKind === "reconnect_google" ? (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={reconnecting}
+              onClick={() => handleReconnectGoogle().finally(() => setReconnecting(false))}
+            >
+              {reconnecting ? (isThai ? "กำลังเชื่อมต่อ..." : "Connecting...") : reconnectLabel}
+            </Button>
+          ) : null}
           <Button type="button" variant="default" onClick={() => onOpenChange(false)}>
             {closeLabel}
           </Button>
