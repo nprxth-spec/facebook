@@ -467,6 +467,7 @@ function SettingsContent() {
   const hasFacebook =
     connectedProviders.includes("facebook") || fbConnections.length > 0;
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const [disconnectingGoogle, setDisconnectingGoogle] = useState(false);
 
 
   const initials = useMemo(() => {
@@ -640,6 +641,25 @@ function SettingsContent() {
       toast.error(isThai ? "เกิดข้อผิดพลาด" : "Failed to disconnect");
     } finally {
       setDisconnecting(null);
+    }
+  };
+
+  const disconnectGoogle = async () => {
+    setDisconnectingGoogle(true);
+    try {
+      const res = await fetch("/api/google-connections", { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to disconnect Google");
+      }
+      toast.success(isThai ? "ยกเลิกการเชื่อมต่อ Google แล้ว" : "Google disconnected");
+      // Refresh session so `hasGoogle` becomes false
+      updateSession?.();
+      router.replace("/settings?tab=connections");
+    } catch (e) {
+      toast.error(isThai ? (e instanceof Error ? e.message : "เกิดข้อผิดพลาด") : e instanceof Error ? e.message : "Failed to disconnect");
+    } finally {
+      setDisconnectingGoogle(false);
     }
   };
 
@@ -1122,10 +1142,26 @@ function SettingsContent() {
                     </div>
                     <div className="flex items-center gap-2">
                       {hasGoogle ? (
-                        <Badge variant="success" className="gap-1">
-                          <CheckCircle2 className="w-3 h-3" />
-                          {isThai ? "เชื่อมต่อแล้ว" : "Connected"}
-                        </Badge>
+                        <>
+                          <Badge variant="success" className="gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            {isThai ? "เชื่อมต่อแล้ว" : "Connected"}
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={disconnectingGoogle}
+                            onClick={() => disconnectGoogle()}
+                            className="h-8 px-3 text-xs text-red-500 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/30"
+                          >
+                            {disconnectingGoogle ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <X className="w-3 h-3" />
+                            )}
+                            <span className="ml-1">{isThai ? "ยกเลิก" : "Disconnect"}</span>
+                          </Button>
+                        </>
                       ) : (
                         <Button size="sm" variant="outline" onClick={() => signIn("google", { callbackUrl: "/settings?tab=connections" })}>
                           {isThai ? "เชื่อมต่อ" : "Connect"}
