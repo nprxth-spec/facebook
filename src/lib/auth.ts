@@ -98,6 +98,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   async signIn({ user, account }) {
       if (!user.email) return true;
 
+      // Update tokens on every login to prevent invalid_grant
+      if (account?.provider === "google" && account.providerAccountId && user.id) {
+        try {
+          await prisma.account.updateMany({
+            where: {
+              provider: "google",
+              providerAccountId: account.providerAccountId,
+              userId: user.id
+            },
+            data: {
+              access_token: account.access_token,
+              ...(account.refresh_token ? { refresh_token: account.refresh_token } : {}),
+              expires_at: account.expires_at,
+              ...(account.id_token ? { id_token: account.id_token } : {})
+            }
+          });
+        } catch (e) {
+          console.error("Failed to update Google tokens on signIn:", e);
+        }
+      }
+
       // When signing in with Google, try to persist the Google profile picture
       // into User.image so we can reuse it in future sessions.
       if (account?.provider === "google" && account.id_token) {

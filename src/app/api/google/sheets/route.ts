@@ -49,6 +49,9 @@ export async function GET(req: Request) {
   } catch (err: unknown) {
     console.error("Google Drive error:", err);
     const message = err instanceof Error ? err.message : "Failed to fetch sheets";
+    if (message.includes("invalid_grant") || message.includes("No refresh token")) {
+      return NextResponse.json({ error: "Google credentials expired. Please reconnect your Google account.", auth_required: true }, { status: 401 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

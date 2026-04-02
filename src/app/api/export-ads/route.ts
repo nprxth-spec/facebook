@@ -437,6 +437,9 @@ export async function POST(req: Request) {
     } catch (err: unknown) {
         console.error("[export-ads] Error:", err);
         const msg = err instanceof Error ? err.message : "Export failed";
+        if (msg.includes("invalid_grant") || msg.includes("No refresh token")) {
+            return NextResponse.json({ error: "Google credentials expired. Please reconnect your Google account.", auth_required: true }, { status: 401 });
+        }
         return NextResponse.json({ error: msg }, { status: 500 });
     }
 }
